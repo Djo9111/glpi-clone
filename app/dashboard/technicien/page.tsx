@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type Ticket = {
+ type Ticket = {
   id: number;
   description: string;
   type: string;
@@ -19,7 +19,7 @@ export default function TechnicianDashboard() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Vérifier le JWT et le rôle
+  // Vérifier le JWT et le rôle (inchangé)
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -40,7 +40,7 @@ export default function TechnicianDashboard() {
     }
   }, [router]);
 
-  // Charger les tickets assignés
+  // Charger les tickets assignés (inchangé)
   const fetchTickets = async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -100,41 +100,70 @@ export default function TechnicianDashboard() {
     }
   };
 
-  if (!user) return <p>Chargement...</p>;
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    router.push("/login");
+  };
+
+  if (!user) return <p className="text-center mt-10 text-neutral-600">Chargement...</p>;
 
   return (
-    <div className="min-h-screen p-8 bg-gray-50">
-      <h1 className="text-3xl font-bold mb-6">Espace Technicien — {user.prenom} {user.nom}</h1>
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-white to-amber-50/40">
+      {/* Header */}
+      <header className="sticky top-0 z-50 backdrop-blur bg-white/70 border-b border-amber-100">
+        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
+          <div className="flex flex-col">
+            <h1 className="text-lg font-semibold tracking-tight">Espace Technicien — {user.prenom} {user.nom}</h1>
+            <p className="text-xs text-neutral-500">Tickets qui vous sont assignés</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={fetchTickets} className="px-4 py-2 text-sm font-medium rounded-xl border border-amber-200 hover:border-amber-300 hover:bg-amber-50 transition">Rafraîchir</button>
+            <button onClick={handleLogout} className="px-4 py-2 text-sm font-medium rounded-xl bg-amber-500 text-white hover:bg-amber-600 active:scale-[.99] shadow-sm transition">Déconnexion</button>
+          </div>
+        </div>
+      </header>
 
-      {loading && <p>Chargement des tickets...</p>}
-      {!loading && tickets.length === 0 && <p className="text-gray-600">Aucun ticket assigné pour le moment.</p>}
+      {/* Contenu */}
+      <main className="mx-auto max-w-6xl w-full px-4 py-8">
+        {loading && (
+          <div className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm text-sm text-neutral-600">Chargement des tickets...</div>
+        )}
+        {!loading && tickets.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-amber-100 bg-white p-6 shadow-sm text-neutral-500 text-sm text-center">Aucun ticket assigné pour le moment.</div>
+        )}
 
-      <div className="grid gap-4">
-        {tickets.map(ticket => (
-          <div key={ticket.id} className="bg-white p-4 rounded shadow">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm text-gray-500">#{ticket.id} • {new Date(ticket.dateCreation).toLocaleString()}</p>
-                <p className="font-semibold">{ticket.description}</p>
-                <p className="text-sm text-gray-600">Type: {ticket.type}</p>
-                <p className="text-sm text-gray-600">Créé par: {ticket.createdBy.prenom} {ticket.createdBy.nom}</p>
-              </div>
+        <div className="grid gap-4">
+          {tickets.map(ticket => (
+            <div key={ticket.id} className="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm hover:shadow-md transition">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs text-neutral-500">
+                    # {ticket.id} • {new Date(ticket.dateCreation).toLocaleString()}
+                  </div>
+                  <p className="mt-1 font-semibold text-neutral-800">{ticket.description}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-600">
+                    <span className="rounded-full bg-amber-50 border border-amber-100 px-2 py-0.5">Type: {ticket.type}</span>
+                    <span className="rounded-full bg-white border border-amber-100 px-2 py-0.5">Créé par {ticket.createdBy.prenom} {ticket.createdBy.nom}</span>
+                  </div>
+                </div>
 
-              <div className="flex flex-col items-end gap-2">
-                <select
-                  value={ticket.statut}
-                  onChange={e => handleStatusChange(ticket.id, e.target.value)}
-                  className="border p-1 rounded"
-                >
-                  <option value="OPEN">OPEN</option>
-                  <option value="IN_PROGRESS">IN_PROGRESS</option>
-                  <option value="CLOSED">CLOSED</option>
-                </select>
+                <div className="flex flex-col items-end gap-2 min-w-[200px]">
+                  <label className="text-xs text-neutral-500">Statut</label>
+                  <select
+                    value={ticket.statut}
+                    onChange={e => handleStatusChange(ticket.id, e.target.value)}
+                    className="border border-amber-200 rounded-xl px-2 py-2 text-sm bg-white"
+                  >
+                    <option value="OPEN">Ouvert</option>
+                    <option value="IN_PROGRESS">En cours</option>
+                    <option value="CLOSED">Clôturé</option>
+                  </select>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      </main>
     </div>
   );
 }

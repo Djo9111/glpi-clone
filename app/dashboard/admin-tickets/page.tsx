@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
-type Ticket = {
+ type Ticket = {
   id: number;
   description: string;
   type: string;
@@ -12,7 +13,7 @@ type Ticket = {
   assignedTo?: { id: number; prenom: string; nom: string } | null;
 };
 
-type Technicien = {
+ type Technicien = {
   id: number;
   prenom: string;
   nom: string;
@@ -89,9 +90,7 @@ export default function AdminTicketsDashboard() {
       }
 
       const updatedTicket = await res.json();
-      setTickets(prev =>
-        prev.map(t => (t.id === ticketId ? updatedTicket : t))
-      );
+      setTickets(prev => prev.map(t => (t.id === ticketId ? updatedTicket : t)));
       alert("Technicien assigné !");
     } catch (error) {
       console.error(error);
@@ -121,9 +120,7 @@ export default function AdminTicketsDashboard() {
       }
 
       const updatedTicket = await res.json();
-      setTickets(prev =>
-        prev.map(t => (t.id === ticketId ? updatedTicket : t))
-      );
+      setTickets(prev => prev.map(t => (t.id === ticketId ? updatedTicket : t)));
       alert("Statut mis à jour !");
     } catch (error) {
       console.error(error);
@@ -131,56 +128,110 @@ export default function AdminTicketsDashboard() {
     }
   };
 
-  if (!user) return <p>Chargement...</p>;
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    router.push("/login");
+  };
+
+  // Découpage Kanban (UI only, pas de changement logique)
+  const groups = useMemo(() => ({
+    OPEN: tickets.filter(t => t.statut === "OPEN"),
+    IN_PROGRESS: tickets.filter(t => t.statut === "IN_PROGRESS"),
+    CLOSED: tickets.filter(t => t.statut === "CLOSED"),
+  }), [tickets]);
+
+  if (!user) return <p className="text-center mt-10 text-neutral-600">Chargement...</p>;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <h1 className="text-3xl font-bold mb-6 text-blue-900">
-        Tableau de bord — Chef DSI
-      </h1>
-
-      {tickets.length === 0 && (
-        <p className="text-gray-500">Aucun ticket pour le moment.</p>
-      )}
-
-      {tickets.map(ticket => (
-        <div
-          key={ticket.id}
-          className="bg-white p-4 rounded-lg shadow-md mb-4 border-l-4 border-blue-800"
-        >
-          <p><strong>ID :</strong> {ticket.id}</p>
-          <p><strong>Description :</strong> {ticket.description}</p>
-          <p><strong>Type :</strong> {ticket.type}</p>
-          <p><strong>Statut :</strong> {ticket.statut}</p>
-          <p><strong>Créé par :</strong> {ticket.createdBy.prenom} {ticket.createdBy.nom}</p>
-          <p><strong>Assigné à :</strong> {ticket.assignedTo ? `${ticket.assignedTo.prenom} ${ticket.assignedTo.nom}` : "— Non assigné —"}</p>
-
-          <div className="flex gap-4 mt-3">
-            <select
-              onChange={e => handleAssign(ticket.id, parseInt(e.target.value))}
-              value={ticket.assignedTo?.id || ""}
-              className="border p-1 rounded"
-            >
-              <option value="">Assigner un technicien</option>
-              {techniciens.map(t => (
-                <option key={t.id} value={t.id}>
-                  {t.prenom} {t.nom}
-                </option>
-              ))}
-            </select>
-
-            <select
-              onChange={e => handleStatusChange(ticket.id, e.target.value)}
-              value={ticket.statut}
-              className="border p-1 rounded"
-            >
-              <option value="OPEN">Ouvert</option>
-              <option value="IN_PROGRESS">En cours</option>
-              <option value="CLOSED">Clôturé</option>
-            </select>
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-white to-amber-50/40">
+      {/* Header avec actions */}
+      <header className="sticky top-0 z-50 backdrop-blur bg-white/70 border-b border-amber-100">
+        <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
+          <div className="flex flex-col">
+            <h1 className="text-lg font-semibold tracking-tight">Tableau de bord — Chef DSI</h1>
+            <p className="text-xs text-neutral-500">Gestion des tickets et délégations</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link href="/dashboard/admin" className="px-4 py-2 text-sm font-medium rounded-xl border border-amber-200 hover:border-amber-300 hover:bg-amber-50 transition">Aller au tableau admin</Link>
+            <button onClick={handleLogout} className="px-4 py-2 text-sm font-medium rounded-xl bg-amber-500 text-white hover:bg-amber-600 active:scale-[.99] shadow-sm transition">Déconnexion</button>
           </div>
         </div>
-      ))}
+      </header>
+
+      {/* Résumé */}
+      <section className="mx-auto max-w-7xl px-4 pt-6 grid gap-4 sm:grid-cols-3">
+        <div className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm">
+          <div className="text-xs font-semibold text-amber-700">Ouverts</div>
+          <div className="mt-1 text-3xl font-bold">{groups.OPEN.length}</div>
+        </div>
+        <div className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm">
+          <div className="text-xs font-semibold text-amber-700">En cours</div>
+          <div className="mt-1 text-3xl font-bold">{groups.IN_PROGRESS.length}</div>
+        </div>
+        <div className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm">
+          <div className="text-xs font-semibold text-amber-700">Clôturés</div>
+          <div className="mt-1 text-3xl font-bold">{groups.CLOSED.length}</div>
+        </div>
+      </section>
+
+      {/* Kanban */}
+      <main className="mx-auto max-w-7xl px-4 pb-10 pt-4 grid gap-4 md:grid-cols-3">
+        {(["OPEN","IN_PROGRESS","CLOSED"] as const).map(column => (
+          <div key={column} className="rounded-2xl border border-amber-100 bg-white p-3 shadow-sm min-h-[300px]">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-semibold text-neutral-700">
+                {column === "OPEN" && "Ouverts"}
+                {column === "IN_PROGRESS" && "En cours"}
+                {column === "CLOSED" && "Clôturés"}
+              </h2>
+              <span className="text-xs text-neutral-500">{groups[column].length}</span>
+            </div>
+
+            {groups[column].length === 0 ? (
+              <div className="text-xs text-neutral-400 border border-dashed border-amber-100 rounded-xl p-4 text-center">Aucun ticket</div>
+            ) : (
+              <ul className="space-y-3">
+                {groups[column].map(ticket => (
+                  <li key={ticket.id} className="rounded-xl border border-amber-100 bg-white p-4 shadow-sm hover:shadow-md transition">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-semibold text-amber-700">{ticket.type}</div>
+                      <div className="text-xs text-neutral-500"># {ticket.id}</div>
+                    </div>
+                    <p className="mt-1 text-sm text-neutral-800">{ticket.description}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-600">
+                      <span className="rounded-full bg-amber-50 border border-amber-100 px-2 py-0.5">Créé par {ticket.createdBy.prenom} {ticket.createdBy.nom}</span>
+                      <span className="rounded-full bg-white border border-amber-100 px-2 py-0.5">Assigné à {ticket.assignedTo ? `${ticket.assignedTo.prenom} ${ticket.assignedTo.nom}` : "—"}</span>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <select
+                        onChange={e => handleAssign(ticket.id, parseInt(e.target.value))}
+                        value={ticket.assignedTo?.id || ""}
+                        className="border border-amber-200 rounded-xl px-2 py-1 text-sm bg-white"
+                      >
+                        <option value="">Assigner un technicien</option>
+                        {techniciens.map(t => (
+                          <option key={t.id} value={t.id}>{t.prenom} {t.nom}</option>
+                        ))}
+                      </select>
+
+                      <select
+                        onChange={e => handleStatusChange(ticket.id, e.target.value)}
+                        value={ticket.statut}
+                        className="border border-amber-200 rounded-xl px-2 py-1 text-sm bg-white"
+                      >
+                        <option value="OPEN">Ouvert</option>
+                        <option value="IN_PROGRESS">En cours</option>
+                        <option value="CLOSED">Clôturé</option>
+                      </select>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
+      </main>
     </div>
   );
 }

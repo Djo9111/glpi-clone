@@ -36,8 +36,10 @@ model Utilisateur {
   departement     Departement? @relation(fields: [departementId], references: [id])
   tickets         Ticket[]     @relation("EmployeTickets")    // tickets créés par l’employé
   ticketsAssignes Ticket[]     @relation("TechnicienTickets") // tickets assignés au technicien
+  notifications   Notification[]                              // 🔔 notifications reçues
   createdAt       DateTime     @default(now())
 }
+
 
 model Departement {
   id       Int           @id @default(autoincrement())
@@ -63,12 +65,16 @@ model Ticket {
 }
 
 model Notification {
-  id        Int      @id @default(autoincrement())
+  id        Int         @id @default(autoincrement())
   message   String
-  dateEnvoi DateTime @default(now())
+  dateEnvoi DateTime    @default(now())
   ticketId  Int
-  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  ticket    Ticket      @relation(fields: [ticketId], references: [id])
+  userId    Int         // destinataire
+  user      Utilisateur @relation(fields: [userId], references: [id])
+  isRead    Boolean     @default(false)
 }
+
 
 model PieceJointe {
   id         Int      @id @default(autoincrement())
