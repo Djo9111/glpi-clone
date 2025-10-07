@@ -1,8 +1,10 @@
+// app/dashboard/technicien/page.tsx  (ou le fichier que tu as montré)
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import NotificationBell from "@/app/components/NotificationBell"; // 👈 Import de la cloche
+import Link from "next/link"; // 👈 ajouter
+import NotificationBell from "@/app/components/NotificationBell";
 
 type Ticket = {
   id: number;
@@ -20,7 +22,6 @@ export default function TechnicianDashboard() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Vérifier le JWT et le rôle
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -41,7 +42,6 @@ export default function TechnicianDashboard() {
     }
   }, [router]);
 
-  // Charger les tickets assignés
   const fetchTickets = async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -49,6 +49,7 @@ export default function TechnicianDashboard() {
     try {
       const res = await fetch("/api/technicien/tickets", {
         headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
       });
       if (!res.ok) {
         const d = await res.json();
@@ -69,7 +70,6 @@ export default function TechnicianDashboard() {
   useEffect(() => {
     if (!user) return;
     fetchTickets();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const handleStatusChange = async (ticketId: number, newStatus: string) => {
@@ -92,7 +92,6 @@ export default function TechnicianDashboard() {
         return;
       }
 
-      // Mettre à jour localement l'item
       const updated = await res.json();
       setTickets(prev => prev.map(t => (t.id === updated.id ? updated : t)));
     } catch (err) {
@@ -110,7 +109,6 @@ export default function TechnicianDashboard() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-white to-amber-50/40">
-      {/* Header */}
       <header className="sticky top-0 z-50 backdrop-blur bg-white/70 border-b border-amber-100">
         <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
           <div className="flex flex-col">
@@ -120,9 +118,8 @@ export default function TechnicianDashboard() {
             <p className="text-xs text-neutral-500">Tickets qui vous sont assignés</p>
           </div>
 
-          {/* 🔔 Zone droite du header */}
           <div className="flex items-center gap-2">
-            <NotificationBell /> {/* 🔔 Cloche de notification */}
+            <NotificationBell />
             <button
               onClick={fetchTickets}
               className="px-4 py-2 text-sm font-medium rounded-xl border border-amber-200 hover:border-amber-300 hover:bg-amber-50 transition"
@@ -139,7 +136,6 @@ export default function TechnicianDashboard() {
         </div>
       </header>
 
-      {/* Contenu */}
       <main className="mx-auto max-w-6xl w-full px-4 py-8">
         {loading && (
           <div className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm text-sm text-neutral-600">
@@ -172,9 +168,19 @@ export default function TechnicianDashboard() {
                       Créé par {ticket.createdBy.prenom} {ticket.createdBy.nom}
                     </span>
                   </div>
+
+                  {/* 👇 Nouveau : lien direct vers les détails complets */}
+                  <div className="mt-3">
+                    <Link
+                      href={`/dashboard/technicien/${ticket.id}`}
+                      className="text-sm text-amber-700 hover:underline"
+                    >
+                      Voir détails & pièces jointes →
+                    </Link>
+                  </div>
                 </div>
 
-                <div className="flex flex-col items-end gap-2 min-w-[200px]">
+                <div className="flex flex-col items-end gap-2 min-w-[220px]">
                   <label className="text-xs text-neutral-500">Statut</label>
                   <select
                     value={ticket.statut}
@@ -185,6 +191,22 @@ export default function TechnicianDashboard() {
                     <option value="IN_PROGRESS">En cours</option>
                     <option value="CLOSED">Clôturé</option>
                   </select>
+
+                  {/* Raccourcis d'action si tu veux */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleStatusChange(ticket.id, "IN_PROGRESS")}
+                      className="text-xs px-2 py-1 rounded-lg border border-amber-200 hover:bg-amber-50"
+                    >
+                      Marquer en cours
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(ticket.id, "CLOSED")}
+                      className="text-xs px-2 py-1 rounded-lg border border-amber-200 hover:bg-amber-50"
+                    >
+                      Clôturer
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
