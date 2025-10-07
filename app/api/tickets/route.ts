@@ -18,7 +18,7 @@ const transporter = nodemailer.createTransport({
   secure: process.env.SMTP_SECURE !== "false",
   auth: {
     user: process.env.SMTP_USER!,
-    pass: process.env.SMTP_PASS!, // ⚠️ DOIT venir de .env.local (jamais en clair)
+    pass: process.env.SMMP_PASS ?? process.env.SMTP_PASS!, // compat
   },
 });
 
@@ -29,6 +29,9 @@ const ADMIN_BASE_URL = process.env.ADMIN_BASE_URL || "https://ton-domaine/admin"
 const MAX_FILES = 5;
 const MAX_SIZE = 10 * 1024 * 1024; // 10 Mo
 const ALLOWED_EXT = new Set(["pdf","png","jpg","jpeg","txt","log","doc","docx","xlsx","csv"]);
+
+// Limite prudente pour pièces jointes Gmail (~25 Mo)
+const MAX_ATTACH_TOTAL = 25 * 1024 * 1024; // 25 Mo
 
 // ——— helpers ———
 function getUserFromRequest(request: Request) {
@@ -82,6 +85,45 @@ function ticketHtml(params: {
   `;
 }
 
+/**
+ * Construit les attachments Nodemailer à partir des chemins publics ("/uploads/...").
+ * - Sanitize le chemin (doit commencer par "/uploads/")
+ * - Respecte la limite MAX_ATTACH_TOTAL (25 Mo)
+ */
+async function buildAttachmentsFromPublic(pieceUrls: string[]) {
+  const attachments: { filename: string; path: string }[] = [];
+  let total = 0;
+
+  for (const url of pieceUrls) {
+    if (!url || typeof url !== "string") continue;
+
+    // Sanitize: on n'accepte que le répertoire public des uploads
+    if (!url.startsWith("/uploads/")) {
+      console.warn("URL PJ non autorisée (ignore) :", url);
+      continue;
+    }
+
+    const absPath = path.join(process.cwd(), "public", url);
+    try {
+      const st = await fs.stat(absPath);
+      // On ne dépasse pas ~25 Mo pour l'ensemble des attachments
+      if (total + st.size > MAX_ATTACH_TOTAL) {
+        console.warn("Limite 25 Mo atteinte, attachment ignoré:", url);
+        continue;
+      }
+      attachments.push({
+        filename: path.basename(url),
+        path: absPath, // Nodemailer streame depuis le fichier
+      });
+      total += st.size;
+    } catch (e) {
+      console.warn("Pièce jointe introuvable, ignorée:", url);
+    }
+  }
+
+  return attachments;
+}
+
 async function sendNewTicketEmails(ticket: any, pieceUrls: string[] = []) {
   // 1) Récupérer les emails des CHEF_DSI
   const chefs = await prisma.utilisateur.findMany({
@@ -91,7 +133,10 @@ async function sendNewTicketEmails(ticket: any, pieceUrls: string[] = []) {
   const toList = chefs.map(c => c.email).filter(Boolean) as string[];
   if (!toList.length) return;
 
-  // 2) Construire le HTML
+  // 2) Eviter les doublons : si mail déjà envoyé on sort
+  if (ticket.mailSentAt) return;
+
+  // 3) Construire le HTML + attachments
   const html = ticketHtml({
     id: ticket.id,
     type: ticket.type,
@@ -101,8 +146,7 @@ async function sendNewTicketEmails(ticket: any, pieceUrls: string[] = []) {
     pieceUrls,
   });
 
-  // 3) Eviter les doublons : si mail déjà envoyé on sort
-  if (ticket.mailSentAt) return;
+  const attachments = await buildAttachmentsFromPublic(pieceUrls);
 
   // 4) Envoi (un mail avec BCC)
   await transporter.sendMail({
@@ -111,6 +155,7 @@ async function sendNewTicketEmails(ticket: any, pieceUrls: string[] = []) {
     bcc: toList.slice(1),
     subject: `Nouveau ticket #${ticket.id} (${ticket.type})`,
     html,
+    attachments, // 👈 pièces jointes réelles
   });
 
   // 5) Marquer comme envoyé
@@ -253,7 +298,7 @@ export async function POST(request: Request) {
         });
       }
 
-      // 4) envoi email (non bloquant pour la création)
+      // 4) envoi email (non bloquant pour la création) — avec attachments
       sendNewTicketEmails(ticket, pieceUrls).catch((e) => {
         console.error("Email CHEF_DSI non envoyé:", e);
       });
