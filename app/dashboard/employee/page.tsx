@@ -17,6 +17,8 @@ type Ticket = {
   assignedTo?: { id: number; prenom: string; nom: string } | null;
 };
 
+type PieceJointe = { id: number; nomFichier: string; url: string };
+
 export default function EmployeeDashboard() {
   const router = useRouter();
   const [user, setUser] = useState<{ id: number; nom: string; prenom: string; role: string } | null>(null);
@@ -100,7 +102,7 @@ export default function EmployeeDashboard() {
     if (!token) return;
 
     try {
-      // ✅ Étape 2 : envoi multipart avec FormData (fichiers inclus)
+      // ✅ envoi multipart avec FormData (fichiers inclus)
       const fd = new FormData();
       fd.append("description", ticketForm.description);
       fd.append("typeTicket", ticketForm.typeTicket);
@@ -111,8 +113,7 @@ export default function EmployeeDashboard() {
       const res = await fetch("/api/tickets", {
         method: "POST",
         headers: {
-          // NE PAS fixer "Content-Type" ici — fetch la mettra avec la boundary
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${token}`, // ne pas mettre Content-Type
         },
         body: fd,
       });
@@ -126,7 +127,6 @@ export default function EmployeeDashboard() {
       alert("Votre demande a été envoyée avec succès !");
       setTicketForm({ description: "", typeTicket: "ASSISTANCE" });
       setFiles([]);
-      // reset input file natif
       const fi = document.getElementById("fileInput") as HTMLInputElement | null;
       if (fi) fi.value = "";
 
@@ -169,7 +169,6 @@ export default function EmployeeDashboard() {
     return filtered.slice(start, start + pageSize);
   }, [filtered, page]);
 
-  // On peut rendre l'UI même si user == null (squelette/placeholder)
   const displayName = user ? `${user.prenom} ${user.nom}` : "…";
 
   return (
@@ -388,7 +387,7 @@ export default function EmployeeDashboard() {
           )}
         </div>
 
-        {/* Drawer (panneau latéral) : détail minimal + mini-timeline, ouvert au clic */}
+        {/* Drawer (panneau latéral) */}
         <TicketDrawer ticket={selected} onClose={() => setSelected(null)} />
       </main>
     </div>
@@ -414,6 +413,35 @@ function StatusChip({ statut }: { statut: "OPEN" | "IN_PROGRESS" | "CLOSED" }) {
 }
 
 function TicketDrawer({ ticket, onClose }: { ticket: Ticket | null; onClose: () => void }) {
+  const [pj, setPj] = useState<PieceJointe[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let abort = false;
+    async function run() {
+      if (!ticket) return;
+      setLoading(true);
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`/api/tickets/${ticket.id}/pieces-jointes`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (!abort) setPj(Array.isArray(data) ? data : []);
+      } catch {
+        if (!abort) setPj([]);
+      } finally {
+        if (!abort) setLoading(false);
+      }
+    }
+    run();
+    return () => {
+      abort = true;
+      setPj([]);
+    };
+  }, [ticket]);
+
   if (!ticket) return null;
   const step = ticket.statut === "CLOSED" ? 3 : ticket.statut === "IN_PROGRESS" ? 2 : ticket.assignedTo ? 1 : 0;
   const steps = ["Créé", "Assigné", "En cours", "Clôturé"];
@@ -438,7 +466,7 @@ function TicketDrawer({ ticket, onClose }: { ticket: Ticket | null; onClose: () 
 
         <div className="mt-4 text-sm text-neutral-800">{ticket.description}</div>
 
-        {/* Mini-timeline ultra concise */}
+        {/* Mini-timeline */}
         <div className="mt-5">
           <div className="flex items-center gap-2 text-[11px] text-neutral-500">
             {steps.map((lbl, i) => (
@@ -457,6 +485,31 @@ function TicketDrawer({ ticket, onClose }: { ticket: Ticket | null; onClose: () 
           <div className="mt-3 text-xs text-neutral-600">
             Technicien : {ticket.assignedTo ? `${ticket.assignedTo.prenom} ${ticket.assignedTo.nom}` : "—"}
           </div>
+        </div>
+
+        {/* 📎 Pièces jointes */}
+        <div className="mt-6">
+          <h4 className="text-sm font-semibold text-neutral-800">Pièces jointes</h4>
+          {loading && <div className="text-xs text-neutral-500 mt-1">Chargement…</div>}
+          {!loading && pj.length === 0 && (
+            <div className="text-xs text-neutral-500 mt-1">Aucune pièce jointe.</div>
+          )}
+          {!loading && pj.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {pj.map((f) => (
+                <li key={f.id}>
+                  <a
+                    className="text-sm text-amber-700 underline hover:no-underline break-all"
+                    href={f.url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {f.nomFichier}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </aside>
     </div>

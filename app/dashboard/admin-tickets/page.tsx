@@ -20,6 +20,8 @@ type Technicien = {
   nom: string;
 };
 
+type PieceJointe = { id: number; nomFichier: string; url: string };
+
 export default function AdminTicketsDashboard() {
   const router = useRouter();
   const [user, setUser] = useState<{ id: number; role: string } | null>(null);
@@ -91,8 +93,6 @@ export default function AdminTicketsDashboard() {
       const updatedTicket = await res.json();
       setTickets((prev) => prev.map((t) => (t.id === ticketId ? updatedTicket : t)));
       alert("Technicien assigné !");
-      // Optionnel : refetch pour rester parfaitement en phase avec le backend
-      // await fetchData();
     } catch (error) {
       console.error(error);
       alert("Erreur lors de l’assignation");
@@ -123,8 +123,6 @@ export default function AdminTicketsDashboard() {
       const updatedTicket = await res.json();
       setTickets((prev) => prev.map((t) => (t.id === ticketId ? updatedTicket : t)));
       alert("Statut mis à jour !");
-      // Optionnel : refetch
-      // await fetchData();
     } catch (error) {
       console.error(error);
       alert("Erreur lors de la mise à jour du statut");
@@ -230,6 +228,11 @@ export default function AdminTicketsDashboard() {
                       </span>
                     </div>
 
+                    {/* 📎 Pièces jointes (affichage à la demande) */}
+                    <div className="mt-3">
+                      <AttachmentList ticketId={ticket.id} />
+                    </div>
+
                     <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <select
                         onChange={(e) => handleAssign(ticket.id, parseInt(e.target.value))}
@@ -261,6 +264,69 @@ export default function AdminTicketsDashboard() {
           </div>
         ))}
       </main>
+    </div>
+  );
+}
+
+/** —————————————————————— */
+/**   Sous-composant PJ     */
+/** —————————————————————— */
+function AttachmentList({ ticketId }: { ticketId: number }) {
+  const [opened, setOpened] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [list, setList] = useState<PieceJointe[]>([]);
+  const toggle = async () => {
+    if (!opened) {
+      setLoading(true);
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`/api/tickets/${ticketId}/pieces-jointes`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        setList(Array.isArray(data) ? data : []);
+      } catch {
+        setList([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+    setOpened((o) => !o);
+  };
+
+  return (
+    <div className="border border-amber-100 rounded-xl p-2">
+      <button
+        onClick={toggle}
+        className="text-xs underline text-amber-700 hover:no-underline"
+      >
+        {opened ? "Masquer les pièces jointes" : "Voir les pièces jointes"}
+      </button>
+      {opened && (
+        <div className="mt-2">
+          {loading && <div className="text-xs text-neutral-500">Chargement…</div>}
+          {!loading && list.length === 0 && (
+            <div className="text-xs text-neutral-500">Aucune pièce jointe.</div>
+          )}
+          {!loading && list.length > 0 && (
+            <ul className="text-sm space-y-1">
+              {list.map((f) => (
+                <li key={f.id}>
+                  <a
+                    href={f.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-amber-700 underline hover:no-underline break-all"
+                  >
+                    {f.nomFichier}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }

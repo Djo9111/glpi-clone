@@ -16,13 +16,17 @@ type Ticket = {
   departement?: { id: number; nom: string } | null;
 };
 
+type PieceJointe = { id: number; nomFichier: string; url: string };
+
 export default function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [user, setUser] = useState<{ id: number; role: string } | null>(null);
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [techniciens, setTechniciens] = useState<UserMin[]>([]);
+  const [pjs, setPjs] = useState<PieceJointe[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingPj, setLoadingPj] = useState(false);
 
   // Auth + rôle
   useEffect(() => {
@@ -47,8 +51,27 @@ export default function TicketDetailPage() {
       const [tData, techData] = await Promise.all([tRes.json(), techRes.json()]);
       if (tRes.ok) setTicket(tData);
       setTechniciens(techData || []);
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+
+    // Pièces jointes
+    try {
+      setLoadingPj(true);
+      const pjRes = await fetch(`/api/tickets/${id}/pieces-jointes`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const pjData = await pjRes.json();
+      setPjs(Array.isArray(pjData) ? pjData : []);
+    } catch (e) {
+      console.error(e);
+      setPjs([]);
+    } finally {
+      setLoadingPj(false);
+    }
   }, [id]);
 
   useEffect(() => { fetchDatas(); }, [fetchDatas]);
@@ -108,14 +131,14 @@ export default function TicketDetailPage() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-6 grid gap-4 md:grid-cols-3">
-        {/* Colonne gauche : détails */}
+        {/* Colonne gauche : détails + pièces jointes */}
         <section className="md:col-span-2 space-y-4">
           <div className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-amber-700">{ticket.type}</span>
               <span className="text-xs text-neutral-500">Statut: {ticket.statut}</span>
             </div>
-            <p className="mt-2 text-neutral-800">{ticket.description}</p>
+            <p className="mt-2 text-neutral-800 whitespace-pre-wrap">{ticket.description}</p>
             <div className="mt-3 flex flex-wrap gap-2 text-xs text-neutral-600">
               <span className="rounded-full bg-amber-50 border border-amber-100 px-2 py-0.5">
                 Créé par {ticket.createdBy.prenom} {ticket.createdBy.nom}
@@ -129,6 +152,42 @@ export default function TicketDetailPage() {
                 </span>
               )}
             </div>
+          </div>
+
+          {/* 📎 Pièces jointes */}
+          <div className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-neutral-700">Pièces jointes</h3>
+              <button
+                onClick={fetchDatas}
+                className="text-xs rounded-lg border border-amber-200 px-2 py-1 hover:bg-amber-50"
+              >
+                Rafraîchir
+              </button>
+            </div>
+
+            {loadingPj && <div className="mt-2 text-xs text-neutral-500">Chargement…</div>}
+
+            {!loadingPj && pjs.length === 0 && (
+              <div className="mt-2 text-sm text-neutral-500">Aucune pièce jointe.</div>
+            )}
+
+            {!loadingPj && pjs.length > 0 && (
+              <ul className="mt-3 space-y-1">
+                {pjs.map((f) => (
+                  <li key={f.id}>
+                    <a
+                      href={f.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm text-amber-700 underline hover:no-underline break-all"
+                    >
+                      {f.nomFichier}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </section>
 
