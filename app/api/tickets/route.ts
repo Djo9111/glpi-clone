@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import path from "node:path";
 import fs from "node:fs/promises";
+import nodemailer from "nodemailer";
 
 export const runtime = "nodejs";        // important pour avoir les APIs Node
 export const dynamic = "force-dynamic"; // utile si besoin de désactiver le cache route
@@ -10,11 +11,26 @@ export const dynamic = "force-dynamic"; // utile si besoin de désactiver le cac
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || "secret123";
 
+// ——— SMTP transporter ———
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT || 465),
+  secure: process.env.SMTP_SECURE !== "false",
+  auth: {
+    user: process.env.SMTP_USER!,
+    pass: process.env.SMTP_PASS!, // ⚠️ DOIT venir de .env.local (jamais en clair)
+  },
+});
+
+const FROM = process.env.EMAIL_FROM || `Assistance DSI <${process.env.SMTP_USER}>`;
+const ADMIN_BASE_URL = process.env.ADMIN_BASE_URL || "https://ton-domaine/admin"; // ajuste si besoin
+
 // ——— réglages upload (peux ajuster) ———
 const MAX_FILES = 5;
 const MAX_SIZE = 10 * 1024 * 1024; // 10 Mo
 const ALLOWED_EXT = new Set(["pdf","png","jpg","jpeg","txt","log","doc","docx","xlsx","csv"]);
 
+// ——— helpers ———
 function getUserFromRequest(request: Request) {
   const token = request.headers.get("Authorization")?.replace("Bearer ", "");
   if (!token) return null;
@@ -27,6 +43,81 @@ function getUserFromRequest(request: Request) {
 
 function slugify(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9_.-]+/g, "-").replace(/-+/g, "-").slice(0, 80);
+}
+
+function escapeHtml(s: string) {
+  return s.replace(/[&<>"']/g, (m) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m] as string)
+  );
+}
+
+function ticketHtml(params: {
+  id: number;
+  type: "ASSISTANCE" | "INTERVENTION";
+  description: string;
+  dateCreation: Date | string;
+  createdBy: { prenom: string; nom: string; email?: string | null };
+  pieceUrls?: string[];
+}) {
+  const desc = escapeHtml(params.description);
+  const date = new Date(params.dateCreation).toLocaleString();
+  const pj = (params.pieceUrls && params.pieceUrls.length)
+    ? `<ul>${params.pieceUrls.map(u => `<li><a href="${u}">${u}</a></li>`).join("")}</ul>`
+    : "<i>Aucune</i>";
+  const auteur = `${escapeHtml(params.createdBy.prenom)} ${escapeHtml(params.createdBy.nom)}${params.createdBy.email ? " ("+escapeHtml(params.createdBy.email)+")" : ""}`;
+
+  return `
+    <div style="font-family:system-ui,Segoe UI,Arial;line-height:1.5">
+      <h2 style="margin:0 0 8px">Nouveau ticket #${params.id}</h2>
+      <p><b>Type :</b> ${params.type}</p>
+      <p><b>Créé par :</b> ${auteur}</p>
+      <p><b>Créé le :</b> ${date}</p>
+      <p><b>Description :</b><br/>${desc}</p>
+      <p><b>Pièces jointes :</b><br/>${pj}</p>
+      <p style="margin-top:12px">
+        Ouvrir dans le back-office :
+        <a href="${ADMIN_BASE_URL}/tickets/${params.id}">Ticket #${params.id}</a>
+      </p>
+    </div>
+  `;
+}
+
+async function sendNewTicketEmails(ticket: any, pieceUrls: string[] = []) {
+  // 1) Récupérer les emails des CHEF_DSI
+  const chefs = await prisma.utilisateur.findMany({
+    where: { role: "CHEF_DSI" },
+    select: { email: true },
+  });
+  const toList = chefs.map(c => c.email).filter(Boolean) as string[];
+  if (!toList.length) return;
+
+  // 2) Construire le HTML
+  const html = ticketHtml({
+    id: ticket.id,
+    type: ticket.type,
+    description: ticket.description,
+    dateCreation: ticket.dateCreation,
+    createdBy: { prenom: ticket.createdBy.prenom, nom: ticket.createdBy.nom, email: ticket.createdBy.email },
+    pieceUrls,
+  });
+
+  // 3) Eviter les doublons : si mail déjà envoyé on sort
+  if (ticket.mailSentAt) return;
+
+  // 4) Envoi (un mail avec BCC)
+  await transporter.sendMail({
+    from: FROM,
+    to: toList[0],
+    bcc: toList.slice(1),
+    subject: `Nouveau ticket #${ticket.id} (${ticket.type})`,
+    html,
+  });
+
+  // 5) Marquer comme envoyé
+  await prisma.ticket.update({
+    where: { id: ticket.id },
+    data: { mailSentAt: new Date() },
+  });
 }
 
 export async function POST(request: Request) {
@@ -71,6 +162,11 @@ export async function POST(request: Request) {
         });
       }
 
+      // 3) envoi email (non bloquant pour la création)
+      sendNewTicketEmails(ticket).catch((e) => {
+        console.error("Email CHEF_DSI non envoyé:", e);
+      });
+
       return NextResponse.json({ message: "Ticket créé", ticket });
     }
 
@@ -100,6 +196,7 @@ export async function POST(request: Request) {
       // 2) gérer les fichiers (champ "files")
       const files = form.getAll("files") as unknown as File[];
       let createdCount = 0;
+      let pieceUrls: string[] = [];
 
       if (files && files.length) {
         if (files.length > MAX_FILES) {
@@ -112,7 +209,6 @@ export async function POST(request: Request) {
         const pjRows: { nomFichier: string; chemin: string; ticketId: number }[] = [];
 
         for (const f of files) {
-          // TS lib DOM File
           const ab = await f.arrayBuffer();
           const buf = Buffer.from(ab);
 
@@ -130,11 +226,13 @@ export async function POST(request: Request) {
           const fullPath = path.join(baseDir, filename);
           await fs.writeFile(fullPath, buf);
 
+          const publicPath = `/uploads/tickets/${ticket.id}/${filename}`;
           pjRows.push({
             nomFichier: original,
-            chemin: `/uploads/tickets/${ticket.id}/${filename}`, // exposé statiquement par Next (public/)
+            chemin: publicPath, // exposé statiquement par Next (public/)
             ticketId: ticket.id,
           });
+          pieceUrls.push(publicPath);
         }
 
         if (pjRows.length) {
@@ -154,6 +252,11 @@ export async function POST(request: Request) {
           data: admins.map((a) => ({ message, ticketId: ticket.id, userId: a.id })),
         });
       }
+
+      // 4) envoi email (non bloquant pour la création)
+      sendNewTicketEmails(ticket, pieceUrls).catch((e) => {
+        console.error("Email CHEF_DSI non envoyé:", e);
+      });
 
       return NextResponse.json({
         message: "Ticket créé",

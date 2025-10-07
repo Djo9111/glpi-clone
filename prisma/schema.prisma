@@ -62,7 +62,9 @@ model Ticket {
   departement   Departement?   @relation(fields: [departementId], references: [id])
   notifications Notification[]
   piecesJointes PieceJointe[]
+  mailSentAt    DateTime?
 }
+
 
 model Notification {
   id        Int         @id @default(autoincrement())
