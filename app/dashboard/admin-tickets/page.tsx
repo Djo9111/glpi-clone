@@ -154,7 +154,7 @@ export default function AdminTicketsDashboard() {
       <header className="sticky top-0 z-50 backdrop-blur bg-white/70 border-b border-amber-100">
         <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
           <div className="flex flex-col">
-            <h1 className="text-lg font-semibold tracking-tight">Tableau de bord — Chef DSI</h1>
+            <h1 className="text-lg font-semibold tracking-tight">Tableau de bord — Admin</h1>
             <p className="text-xs text-neutral-500">Gestion des tickets et délégations</p>
           </div>
           <div className="flex items-center gap-2">

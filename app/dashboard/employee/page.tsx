@@ -32,6 +32,9 @@ export default function EmployeeDashboard() {
   const pageSize = 8;
   const [selected, setSelected] = useState<Ticket | null>(null);
 
+  // 📎 fichiers sélectionnés (envoyés à l'étape 2)
+  const [files, setFiles] = useState<File[]>([]);
+
   // Vérification JWT et rôle (ne pas retourner avant la fin des hooks)
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -86,19 +89,32 @@ export default function EmployeeDashboard() {
     setTicketForm({ ...ticketForm, [e.target.name]: e.target.value });
   };
 
+  const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const list = Array.from(e.target.files || []);
+    setFiles(list.slice(0, 5)); // limite douce à 5 fichiers en UI
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const token = localStorage.getItem("token");
     if (!token) return;
 
     try {
+      // ✅ Étape 2 : envoi multipart avec FormData (fichiers inclus)
+      const fd = new FormData();
+      fd.append("description", ticketForm.description);
+      fd.append("typeTicket", ticketForm.typeTicket);
+      if (files.length) {
+        files.forEach((f) => fd.append("files", f));
+      }
+
       const res = await fetch("/api/tickets", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
+          // NE PAS fixer "Content-Type" ici — fetch la mettra avec la boundary
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(ticketForm),
+        body: fd,
       });
 
       const data = await res.json();
@@ -109,6 +125,11 @@ export default function EmployeeDashboard() {
 
       alert("Votre demande a été envoyée avec succès !");
       setTicketForm({ description: "", typeTicket: "ASSISTANCE" });
+      setFiles([]);
+      // reset input file natif
+      const fi = document.getElementById("fileInput") as HTMLInputElement | null;
+      if (fi) fi.value = "";
+
       fetchMyTickets(); // refresh la liste
       setQuery("");
       setStatusFilter("ALL");
@@ -217,6 +238,34 @@ export default function EmployeeDashboard() {
                 className="border border-amber-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-200/60 outline-none rounded-xl px-3 py-2 min-h-[100px]"
                 required
               />
+            </div>
+
+            {/* 📎 Sélection & upload de fichiers */}
+            <div className="grid gap-1.5">
+              <label htmlFor="fileInput" className="text-sm font-medium">
+                Joindre un ou plusieurs fichiers
+              </label>
+              <input
+                id="fileInput"
+                name="files"
+                type="file"
+                multiple
+                onChange={handleFiles}
+                className="border border-amber-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-200/60 outline-none rounded-xl px-3 py-2 text-sm bg-white"
+                accept=".pdf,.png,.jpg,.jpeg,.txt,.log,.doc,.docx,.xlsx,.csv"
+              />
+              {files.length > 0 && (
+                <ul className="mt-1 text-xs text-neutral-600 list-disc ml-5 space-y-0.5">
+                  {files.map((f, i) => (
+                    <li key={i}>
+                      {f.name} — {(f.size / 1024 / 1024).toFixed(2)} Mo
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="text-xs text-neutral-500">
+                Formats acceptés : PDF, images, Office, TXT/LOG. Taille max 10 Mo, jusqu’à 5 fichiers.
+              </p>
             </div>
 
             <button
