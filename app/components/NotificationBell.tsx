@@ -15,6 +15,7 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const [items, setItems] = useState<Notif[]>([]);
+  const [role, setRole] = useState<string | null>(null); // 👈 rôle depuis le JWT
   const timerRef = useRef<number | null>(null);
 
   const fetchNotifications = async () => {
@@ -36,8 +37,15 @@ export default function NotificationBell() {
   };
 
   useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        setRole(payload.role ?? null); // 👈 rôle stocké
+      } catch {}
+    }
+
     fetchNotifications();
-    // polling toutes les 12s (compromis UX/charge serveur)
     timerRef.current = window.setInterval(fetchNotifications, 12000);
     return () => {
       if (timerRef.current) window.clearInterval(timerRef.current);
@@ -57,13 +65,20 @@ export default function NotificationBell() {
         body: JSON.stringify({ all: true }),
       });
       if (res.ok) {
-        // MAJ locale immédiate
         setUnread(0);
-        setItems((prev) => prev.map((n) => ({ ...n, isRead: true })));
+        setItems(prev => prev.map(n => ({ ...n, isRead: true })));
       }
     } catch (e) {
       console.error(e);
     }
+  };
+
+  // 👇 Détermine le lien selon le rôle
+  const ticketHref = (id?: number) => {
+    if (!id) return "#";
+    if (role === "CHEF_DSI") return `/dashboard/admin-tickets/${id}`;
+    if (role === "TECHNICIEN") return `/dashboard/technicien/${id}`;
+    return `/dashboard/employee`; // fallback par défaut
   };
 
   return (
@@ -101,8 +116,13 @@ export default function NotificationBell() {
             <div className="p-4 text-sm text-neutral-500">Aucune notification</div>
           ) : (
             <ul className="divide-y divide-amber-100">
-              {items.map((n) => (
-                <li key={n.id} className={`px-4 py-3 ${n.isRead ? "bg-white" : "bg-amber-50/50"}`}>
+              {items.map(n => (
+                <li
+                  key={n.id}
+                  className={`px-4 py-3 ${
+                    n.isRead ? "bg-white" : "bg-amber-50/50"
+                  }`}
+                >
                   <div className="flex justify-between items-start gap-3">
                     <div className="flex-1">
                       <p className="text-sm text-neutral-800">{n.message}</p>
@@ -111,14 +131,16 @@ export default function NotificationBell() {
                       </p>
                       <div className="mt-2">
                         <Link
-                          href={`/admin/tickets/${n.ticket?.id}`}
+                          href={ticketHref(n.ticket?.id)} // 👈 lien dynamique
                           className="text-xs text-amber-700 hover:underline"
                         >
                           Ouvrir le ticket #{n.ticket?.id}
                         </Link>
                       </div>
                     </div>
-                    {!n.isRead && <span className="mt-1 h-2 w-2 rounded-full bg-amber-500" />}
+                    {!n.isRead && (
+                      <span className="mt-1 h-2 w-2 rounded-full bg-amber-500" />
+                    )}
                   </div>
                 </li>
               ))}

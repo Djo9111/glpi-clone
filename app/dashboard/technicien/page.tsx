@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import NotificationBell from "@/app/components/NotificationBell"; // 👈 Import de la cloche
 
- type Ticket = {
+type Ticket = {
   id: number;
   description: string;
   type: string;
@@ -19,7 +20,7 @@ export default function TechnicianDashboard() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Vérifier le JWT et le rôle (inchangé)
+  // Vérifier le JWT et le rôle
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -40,7 +41,7 @@ export default function TechnicianDashboard() {
     }
   }, [router]);
 
-  // Charger les tickets assignés (inchangé)
+  // Charger les tickets assignés
   const fetchTickets = async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -113,12 +114,27 @@ export default function TechnicianDashboard() {
       <header className="sticky top-0 z-50 backdrop-blur bg-white/70 border-b border-amber-100">
         <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
           <div className="flex flex-col">
-            <h1 className="text-lg font-semibold tracking-tight">Espace Technicien — {user.prenom} {user.nom}</h1>
+            <h1 className="text-lg font-semibold tracking-tight">
+              Espace Technicien — {user.prenom} {user.nom}
+            </h1>
             <p className="text-xs text-neutral-500">Tickets qui vous sont assignés</p>
           </div>
+
+          {/* 🔔 Zone droite du header */}
           <div className="flex items-center gap-2">
-            <button onClick={fetchTickets} className="px-4 py-2 text-sm font-medium rounded-xl border border-amber-200 hover:border-amber-300 hover:bg-amber-50 transition">Rafraîchir</button>
-            <button onClick={handleLogout} className="px-4 py-2 text-sm font-medium rounded-xl bg-amber-500 text-white hover:bg-amber-600 active:scale-[.99] shadow-sm transition">Déconnexion</button>
+            <NotificationBell /> {/* 🔔 Cloche de notification */}
+            <button
+              onClick={fetchTickets}
+              className="px-4 py-2 text-sm font-medium rounded-xl border border-amber-200 hover:border-amber-300 hover:bg-amber-50 transition"
+            >
+              Rafraîchir
+            </button>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 text-sm font-medium rounded-xl bg-amber-500 text-white hover:bg-amber-600 active:scale-[.99] shadow-sm transition"
+            >
+              Déconnexion
+            </button>
           </div>
         </div>
       </header>
@@ -126,15 +142,22 @@ export default function TechnicianDashboard() {
       {/* Contenu */}
       <main className="mx-auto max-w-6xl w-full px-4 py-8">
         {loading && (
-          <div className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm text-sm text-neutral-600">Chargement des tickets...</div>
+          <div className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm text-sm text-neutral-600">
+            Chargement des tickets...
+          </div>
         )}
         {!loading && tickets.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-amber-100 bg-white p-6 shadow-sm text-neutral-500 text-sm text-center">Aucun ticket assigné pour le moment.</div>
+          <div className="rounded-2xl border border-dashed border-amber-100 bg-white p-6 shadow-sm text-neutral-500 text-sm text-center">
+            Aucun ticket assigné pour le moment.
+          </div>
         )}
 
         <div className="grid gap-4">
           {tickets.map(ticket => (
-            <div key={ticket.id} className="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm hover:shadow-md transition">
+            <div
+              key={ticket.id}
+              className="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm hover:shadow-md transition"
+            >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="text-xs text-neutral-500">
@@ -142,8 +165,12 @@ export default function TechnicianDashboard() {
                   </div>
                   <p className="mt-1 font-semibold text-neutral-800">{ticket.description}</p>
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-600">
-                    <span className="rounded-full bg-amber-50 border border-amber-100 px-2 py-0.5">Type: {ticket.type}</span>
-                    <span className="rounded-full bg-white border border-amber-100 px-2 py-0.5">Créé par {ticket.createdBy.prenom} {ticket.createdBy.nom}</span>
+                    <span className="rounded-full bg-amber-50 border border-amber-100 px-2 py-0.5">
+                      Type: {ticket.type}
+                    </span>
+                    <span className="rounded-full bg-white border border-amber-100 px-2 py-0.5">
+                      Créé par {ticket.createdBy.prenom} {ticket.createdBy.nom}
+                    </span>
                   </div>
                 </div>
 
