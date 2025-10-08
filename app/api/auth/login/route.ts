@@ -16,7 +16,9 @@ export async function POST(request: Request) {
   if (!isValid) return NextResponse.json({ error: "Mot de passe incorrect" }, { status: 401 });
 
   // Création du token JWT
-  const token = jwt.sign({ id: user.id, role: user.role, nom: user.nom, prenom: user.prenom }, JWT_SECRET, { expiresIn: "24h" });
+  const token = jwt.sign({ id: user.id, role: user.role, nom: user.nom, prenom: user.prenom },
+    JWT_SECRET,
+    { expiresIn: "24h" });
 
   return NextResponse.json({ token, user: { id: user.id, nom: user.nom, prenom: user.prenom, role: user.role } });
 }

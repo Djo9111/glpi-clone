@@ -18,19 +18,21 @@ export default function RegisterPage() {
     motDePasse: "",
     confirmMotDePasse: "",
     departementId: "",
-    matricule: ""
+    matricule: "",
   });
 
   // Fetch départements depuis l'API (inchangé)
   useEffect(() => {
     fetch("/api/departements")
-      .then(res => res.json())
+      .then((res) => res.json())
       .then((data: Departement[]) => setDepartements(data))
-      .catch(err => console.error("Erreur fetch départements :", err));
+      .catch((err) => console.error("Erreur fetch départements :", err));
   }, []);
 
   // Gestion des changements (inchangé)
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
@@ -47,7 +49,7 @@ export default function RegisterPage() {
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form)
+        body: JSON.stringify(form),
       });
 
       const data = await res.json();
@@ -66,70 +68,94 @@ export default function RegisterPage() {
     }
   };
 
+  // Styles utilitaires
+  const fieldBase =
+    "border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200/70 outline-none rounded-xl px-3 py-2 transition bg-white placeholder:text-zinc-400";
+  const labelBase = "text-sm font-medium text-zinc-800";
+  const helperBase = "text-xs text-zinc-500";
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-white to-amber-50/40 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-white to-slate-50 px-4">
       <div className="w-full max-w-xl">
         {/* Header compact avec logo */}
         <div className="mb-6 flex items-center gap-3">
-          <Image src="/cds.png" alt="Logo CDS" width={56} height={56} className="rounded-xl shadow-sm" />
+          <Image
+            src="/cds.png"
+            alt="Logo CDS"
+            width={48}
+            height={48}
+            className="rounded-lg shadow-sm"
+          />
           <div className="leading-tight">
-            <h1 className="text-xl font-semibold tracking-tight">CDS Support</h1>
-            <p className="text-xs text-neutral-500">Plateforme interne DSI</p>
+            <h1 className="text-xl font-semibold tracking-tight text-zinc-900">
+              CDS Support
+            </h1>
+            <p className="text-xs text-zinc-500">Plateforme interne DSI</p>
           </div>
         </div>
 
         {/* Carte formulaire */}
-        <div className="rounded-2xl border border-amber-100 bg-white shadow-sm">
-          <div className="border-b border-amber-100 px-6 py-4">
-            <h2 className="text-lg font-bold">Inscription Employé</h2>
-            <p className="mt-1 text-sm text-neutral-600">Créez votre compte pour soumettre des demandes d’assistance ou d’intervention.</p>
+        <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
+          <div className="border-b border-zinc-200 px-6 py-4 bg-white/60 backdrop-blur-sm">
+            <h2 className="text-lg font-bold text-zinc-900">Inscription Employé</h2>
+            <p className="mt-1 text-sm text-zinc-600">
+              Créez votre compte pour soumettre des demandes d’assistance ou d’intervention.
+            </p>
           </div>
 
           <form className="px-6 py-6 grid gap-4" onSubmit={handleSubmit}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="grid gap-1.5">
-                <label htmlFor="prenom" className="text-sm font-medium">Prénom</label>
+                <label htmlFor="prenom" className={labelBase}>
+                  Prénom
+                </label>
                 <input
                   id="prenom"
                   name="prenom"
                   placeholder="Ex.: Awa"
                   value={form.prenom}
                   onChange={handleChange}
-                  className="border border-amber-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-200/60 outline-none rounded-xl px-3 py-2"
+                  className={fieldBase}
                   required
                 />
               </div>
               <div className="grid gap-1.5">
-                <label htmlFor="nom" className="text-sm font-medium">Nom</label>
+                <label htmlFor="nom" className={labelBase}>
+                  Nom
+                </label>
                 <input
                   id="nom"
                   name="nom"
                   placeholder="Ex.: Ndiaye"
                   value={form.nom}
                   onChange={handleChange}
-                  className="border border-amber-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-200/60 outline-none rounded-xl px-3 py-2"
+                  className={fieldBase}
                   required
                 />
               </div>
             </div>
 
             <div className="grid gap-1.5">
-              <label htmlFor="email" className="text-sm font-medium">Email</label>
+              <label htmlFor="email" className={labelBase}>
+                Email
+              </label>
               <input
                 id="email"
                 type="email"
                 name="email"
-                placeholder="vous@entreprise.com"
+                placeholder="awa.ndiaye@cds.sn"
                 value={form.email}
                 onChange={handleChange}
-                className="border border-amber-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-200/60 outline-none rounded-xl px-3 py-2"
+                className={fieldBase}
                 required
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="grid gap-1.5">
-                <label htmlFor="motDePasse" className="text-sm font-medium">Mot de passe</label>
+                <label htmlFor="motDePasse" className={labelBase}>
+                  Mot de passe
+                </label>
                 <input
                   id="motDePasse"
                   type="password"
@@ -137,12 +163,14 @@ export default function RegisterPage() {
                   placeholder="••••••••"
                   value={form.motDePasse}
                   onChange={handleChange}
-                  className="border border-amber-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-200/60 outline-none rounded-xl px-3 py-2"
+                  className={fieldBase}
                   required
                 />
               </div>
               <div className="grid gap-1.5">
-                <label htmlFor="confirmMotDePasse" className="text-sm font-medium">Confirmer le mot de passe</label>
+                <label htmlFor="confirmMotDePasse" className={labelBase}>
+                  Confirmer le mot de passe
+                </label>
                 <input
                   id="confirmMotDePasse"
                   type="password"
@@ -150,57 +178,66 @@ export default function RegisterPage() {
                   placeholder="••••••••"
                   value={form.confirmMotDePasse}
                   onChange={handleChange}
-                  className="border border-amber-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-200/60 outline-none rounded-xl px-3 py-2"
+                  className={fieldBase}
                   required
                 />
               </div>
             </div>
 
             <div className="grid gap-1.5">
-              <label htmlFor="departementId" className="text-sm font-medium">Département</label>
+              <label htmlFor="departementId" className={labelBase}>
+                Département
+              </label>
               <select
                 id="departementId"
                 name="departementId"
                 value={form.departementId}
                 onChange={handleChange}
-                className="border border-amber-200 bg-white focus:border-amber-400 focus:ring-2 focus:ring-amber-200/60 outline-none rounded-xl px-3 py-2"
+                className={`${fieldBase} appearance-none`}
                 required
               >
                 <option value="">Sélectionnez votre département</option>
-                {departements.map(d => (
-                  <option key={d.id} value={d.id}>{d.nom}</option>
+                {departements.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.nom}
+                  </option>
                 ))}
               </select>
-              <p className="text-xs text-neutral-500">La liste est chargée depuis la base de données.</p>
+              <p className={helperBase}>La liste est chargée depuis la base de données.</p>
             </div>
 
             <div className="grid gap-1.5">
-              <label htmlFor="matricule" className="text-sm font-medium">Matricule <span className="text-neutral-400">(optionnel)</span></label>
+              <label htmlFor="matricule" className={labelBase}>
+                Matricule <span className="text-zinc-400">(optionnel)</span>
+              </label>
               <input
                 id="matricule"
                 name="matricule"
                 placeholder="Ex.: EMP-00123"
                 value={form.matricule}
                 onChange={handleChange}
-                className="border border-amber-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-200/60 outline-none rounded-xl px-3 py-2"
+                className={fieldBase}
               />
             </div>
 
             <button
               type="submit"
-              className="mt-2 inline-flex items-center justify-center rounded-2xl bg-amber-500 px-5 py-2.5 font-semibold text-white shadow-sm transition hover:bg-amber-600 active:scale-[.99]"
+              className="mt-2 inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-2.5 font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[.99]"
             >
               S'inscrire
             </button>
 
-            <div className="pt-2 text-sm text-neutral-600">
-              Déjà un compte ? <a href="/login" className="font-medium text-amber-700 hover:underline">Se connecter</a>
+            <div className="pt-2 text-sm text-zinc-600">
+              Déjà un compte ?
+              <a href="/login" className="font-medium text-blue-700 hover:underline">
+                {" "}Se connecter
+              </a>
             </div>
           </form>
         </div>
 
         {/* Note légale / footer mince */}
-        <p className="mt-4 text-center text-xs text-neutral-500">
+        <p className="mt-4 text-center text-xs text-zinc-500">
           En créant un compte, vous acceptez nos conditions d’utilisation et notre politique de confidentialité.
         </p>
       </div>

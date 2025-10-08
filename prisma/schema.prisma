@@ -24,28 +24,28 @@ enum TypeTicket {
   INTERVENTION
 }
 
-model Utilisateur {
-  id              Int          @id @default(autoincrement())
-  nom             String
-  prenom          String
-  email           String       @unique
-  motDePasse      String
-  role            Role         @default(EMPLOYE)
-  matricule       String?      @unique
-  departementId   Int?
-  departement     Departement? @relation(fields: [departementId], references: [id])
-  tickets         Ticket[]     @relation("EmployeTickets")    // tickets créés par l’employé
-  ticketsAssignes Ticket[]     @relation("TechnicienTickets") // tickets assignés au technicien
-  notifications   Notification[]                              // 🔔 notifications reçues
-  createdAt       DateTime     @default(now())
-}
-
-
 model Departement {
   id       Int           @id @default(autoincrement())
   nom      String        @unique
   employes Utilisateur[]
-  tickets  Ticket[]      // relation inverse
+  tickets  Ticket[] // relation inverse
+}
+
+model Utilisateur {
+  id                  Int            @id @default(autoincrement())
+  nom                 String
+  prenom              String
+  email               String         @unique
+  motDePasse          String
+  role                Role           @default(EMPLOYE)
+  matricule           String?        @unique
+  departementId       Int?
+  departement         Departement?   @relation(fields: [departementId], references: [id])
+  tickets             Ticket[]       @relation("EmployeTickets")
+  ticketsAssignes     Ticket[]       @relation("TechnicienTickets")
+  notifications       Notification[]
+  createdAt           DateTime       @default(now())
+  commentairesRediges Commentaire[]  @relation("CommentaireAuteur")
 }
 
 model Ticket {
@@ -62,9 +62,22 @@ model Ticket {
   departement   Departement?   @relation(fields: [departementId], references: [id])
   notifications Notification[]
   piecesJointes PieceJointe[]
+  commentaires  Commentaire[]
   mailSentAt    DateTime?
 }
 
+model Commentaire {
+  id        Int         @id @default(autoincrement())
+  contenu   String      @db.Text
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  ticketId  Int
+  ticket    Ticket      @relation(fields: [ticketId], references: [id])
+  auteurId  Int
+  auteur    Utilisateur @relation("CommentaireAuteur", fields: [auteurId], references: [id])
+
+  @@index([ticketId, createdAt])
+}
 
 model Notification {
   id        Int         @id @default(autoincrement())
@@ -72,11 +85,10 @@ model Notification {
   dateEnvoi DateTime    @default(now())
   ticketId  Int
   ticket    Ticket      @relation(fields: [ticketId], references: [id])
-  userId    Int         // destinataire
+  userId    Int // destinataire
   user      Utilisateur @relation(fields: [userId], references: [id])
   isRead    Boolean     @default(false)
 }
-
 
 model PieceJointe {
   id         Int      @id @default(autoincrement())

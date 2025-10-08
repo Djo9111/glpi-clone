@@ -1,3 +1,4 @@
+// app/dashboard/admin-tickets/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -28,7 +29,6 @@ export default function AdminTicketsDashboard() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [techniciens, setTechniciens] = useState<Technicien[]>([]);
 
-  // ✅ Vérification JWT et rôle
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -48,7 +48,6 @@ export default function AdminTicketsDashboard() {
     }
   }, [router]);
 
-  // ✅ Récupération tickets et techniciens
   const fetchData = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -58,8 +57,8 @@ export default function AdminTicketsDashboard() {
         fetch("/api/admin/techniciens", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }),
       ]);
       const [ticketsData, techsData] = await Promise.all([ticketsRes.json(), techsRes.json()]);
-      setTickets(ticketsData);
-      setTechniciens(techsData);
+      setTickets(Array.isArray(ticketsData) ? ticketsData : []);
+      setTechniciens(Array.isArray(techsData) ? techsData : []);
     } catch (err) {
       console.error(err);
     }
@@ -69,7 +68,6 @@ export default function AdminTicketsDashboard() {
     fetchData();
   }, [fetchData]);
 
-  // ✅ Assigner un technicien
   const handleAssign = async (ticketId: number, technicienId: number) => {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -95,11 +93,10 @@ export default function AdminTicketsDashboard() {
       alert("Technicien assigné !");
     } catch (error) {
       console.error(error);
-      alert("Erreur lors de l’assignation");
+      alert("Erreur lors de l'assignation");
     }
   };
 
-  // ✅ Changer le statut
   const handleStatusChange = async (ticketId: number, newStatus: string) => {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -134,7 +131,6 @@ export default function AdminTicketsDashboard() {
     router.push("/login");
   };
 
-  // Découpage Kanban (UI only)
   const groups = useMemo(
     () => ({
       OPEN: tickets.filter((t) => t.statut === "OPEN"),
@@ -144,29 +140,43 @@ export default function AdminTicketsDashboard() {
     [tickets]
   );
 
-  if (!user) return <p className="text-center mt-10 text-neutral-600">Chargement...</p>;
+  if (!user) return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-50">
+      <div className="text-center">
+        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
+        <p className="text-slate-600">Chargement...</p>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-white to-amber-50/40">
-      {/* Header avec actions */}
-      <header className="sticky top-0 z-50 backdrop-blur bg-white/70 border-b border-amber-100">
-        <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
-          <div className="flex flex-col">
-            <h1 className="text-lg font-semibold tracking-tight">Tableau de bord — Admin</h1>
-            <p className="text-xs text-neutral-500">Gestion des tickets et délégations</p>
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-50">
+      {/* Header moderne avec logo */}
+      <header className="sticky top-0 z-50 backdrop-blur-md bg-white/80 border-b border-slate-200/60 shadow-sm">
+        <div className="mx-auto max-w-[1600px] px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <img 
+              src="/cds.png" 
+              alt="CDS Logo" 
+              className="h-10 w-auto"
+            />
+            <div className="h-8 w-px bg-slate-200"></div>
+            <div>
+              <h1 className="text-lg font-semibold text-slate-800">Gestion des tickets</h1>
+              <p className="text-xs text-slate-500">Tableau de bord administrateur</p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* 🔔 Cloche de notifications */}
             <NotificationBell />
             <Link
               href="/dashboard/admin"
-              className="px-4 py-2 text-sm font-medium rounded-xl border border-amber-200 hover:border-amber-300 hover:bg-amber-50 transition"
+              className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
             >
-              Aller au tableau admin
+              Créer utilisateur
             </Link>
             <button
               onClick={handleLogout}
-              className="px-4 py-2 text-sm font-medium rounded-xl bg-amber-500 text-white hover:bg-amber-600 active:scale-[.99] shadow-sm transition"
+              className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 active:scale-[.98] shadow-sm transition-all"
             >
               Déconnexion
             </button>
@@ -174,107 +184,178 @@ export default function AdminTicketsDashboard() {
         </div>
       </header>
 
-      {/* Résumé */}
-      <section className="mx-auto max-w-7xl px-4 pt-6 grid gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm">
-          <div className="text-xs font-semibold text-amber-700">Ouverts</div>
-          <div className="mt-1 text-3xl font-bold">{groups.OPEN.length}</div>
+      {/* Statistiques compactes */}
+      <section className="mx-auto max-w-[1600px] w-full px-6 pt-6 grid gap-4 grid-cols-3">
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs font-semibold text-slate-500 uppercase">Ouverts</div>
+              <div className="mt-1 text-2xl font-bold text-slate-900">{groups.OPEN.length}</div>
+            </div>
+            <div className="p-2 rounded-lg bg-yellow-50">
+              <span className="text-xl"></span>
+            </div>
+          </div>
         </div>
-        <div className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm">
-          <div className="text-xs font-semibold text-amber-700">En cours</div>
-          <div className="mt-1 text-3xl font-bold">{groups.IN_PROGRESS.length}</div>
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs font-semibold text-slate-500 uppercase">En cours</div>
+              <div className="mt-1 text-2xl font-bold text-slate-900">{groups.IN_PROGRESS.length}</div>
+            </div>
+            <div className="p-2 rounded-lg bg-blue-50">
+              <span className="text-xl"></span>
+            </div>
+          </div>
         </div>
-        <div className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm">
-          <div className="text-xs font-semibold text-amber-700">Clôturés</div>
-          <div className="mt-1 text-3xl font-bold">{groups.CLOSED.length}</div>
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs font-semibold text-slate-500 uppercase">Clôturés</div>
+              <div className="mt-1 text-2xl font-bold text-slate-900">{groups.CLOSED.length}</div>
+            </div>
+            <div className="p-2 rounded-lg bg-emerald-50">
+              <span className="text-xl"></span>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Kanban */}
-      <main className="mx-auto max-w-7xl px-4 pb-10 pt-4 grid gap-4 md:grid-cols-3">
-        {(["OPEN", "IN_PROGRESS", "CLOSED"] as const).map((column) => (
-          <div key={column} className="rounded-2xl border border-amber-100 bg-white p-3 shadow-sm min-h-[300px]">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-semibold text-neutral-700">
-                {column === "OPEN" && "Ouverts"}
-                {column === "IN_PROGRESS" && "En cours"}
-                {column === "CLOSED" && "Clôturés"}
-              </h2>
-              <span className="text-xs text-neutral-500">{groups[column].length}</span>
-            </div>
+      {/* Kanban Board - Layout optimisé */}
+      <main className="mx-auto max-w-[1600px] w-full px-6 pb-10 pt-6 grid gap-4 grid-cols-3">
+        {(["OPEN", "IN_PROGRESS", "CLOSED"] as const).map((column) => {
+          const columnConfig = {
+            OPEN: { 
+              label: "Ouverts", 
+              icon: "",
+              bgClass: "bg-yellow-50",
+              borderClass: "border-yellow-200",
+              textClass: "text-yellow-700"
+            },
+            IN_PROGRESS: { 
+              label: "En cours", 
+              icon: "",
+              bgClass: "bg-blue-50",
+              borderClass: "border-blue-200",
+              textClass: "text-blue-700"
+            },
+            CLOSED: { 
+              label: "Clôturés", 
+              icon: "",
+              bgClass: "bg-emerald-50",
+              borderClass: "border-emerald-200",
+              textClass: "text-emerald-700"
+            },
+          };
+          
+          const config = columnConfig[column];
 
-            {groups[column].length === 0 ? (
-              <div className="text-xs text-neutral-400 border border-dashed border-amber-100 rounded-xl p-4 text-center">
-                Aucun ticket
+          return (
+            <div key={column} className="rounded-lg border border-slate-200 bg-white shadow-sm flex flex-col">
+              <div className={`flex items-center justify-between px-4 py-3 border-b ${config.borderClass} ${config.bgClass} rounded-t-lg`}>
+                <h2 className={`text-sm font-bold ${config.textClass} flex items-center gap-2`}>
+                  <span>{config.icon}</span>
+                  {config.label}
+                </h2>
+                <span className={`text-xs font-semibold ${config.textClass} px-2 py-0.5 rounded-full ${config.bgClass} border ${config.borderClass}`}>
+                  {groups[column].length}
+                </span>
               </div>
-            ) : (
-              <ul className="space-y-3">
-                {groups[column].map((ticket) => (
-                  <li
-                    key={ticket.id}
-                    className="rounded-xl border border-amber-100 bg-white p-4 shadow-sm hover:shadow-md transition"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs font-semibold text-amber-700">{ticket.type}</div>
-                      <div className="text-xs text-neutral-500"># {ticket.id}</div>
-                    </div>
-                    <p className="mt-1 text-sm text-neutral-800">{ticket.description}</p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-600">
-                      <span className="rounded-full bg-amber-50 border border-amber-100 px-2 py-0.5">
-                        Créé par {ticket.createdBy.prenom} {ticket.createdBy.nom}
-                      </span>
-                      <span className="rounded-full bg-white border border-amber-100 px-2 py-0.5">
-                        Assigné à {ticket.assignedTo ? `${ticket.assignedTo.prenom} ${ticket.assignedTo.nom}` : "—"}
-                      </span>
-                    </div>
 
-                    {/* 📎 Pièces jointes (affichage à la demande) */}
-                    <div className="mt-3">
-                      <AttachmentList ticketId={ticket.id} />
-                    </div>
-
-                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <select
-                        onChange={(e) => handleAssign(ticket.id, parseInt(e.target.value))}
-                        value={ticket.assignedTo?.id || ""}
-                        className="border border-amber-200 rounded-xl px-2 py-1 text-sm bg-white"
+              <div className="flex-1 p-3 overflow-y-auto max-h-[calc(100vh-280px)]">
+                {groups[column].length === 0 ? (
+                  <div className="text-xs text-slate-400 border-2 border-dashed border-slate-200 rounded-lg p-6 text-center">
+                    Aucun ticket
+                  </div>
+                ) : (
+                  <ul className="space-y-3">
+                    {groups[column].map((ticket) => (
+                      <li
+                        key={ticket.id}
+                        className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm hover:shadow-md transition-all hover:border-slate-300"
                       >
-                        <option value="">Assigner un technicien</option>
-                        {techniciens.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.prenom} {t.nom}
-                          </option>
-                        ))}
-                      </select>
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-md ${
+                            ticket.type === "ASSISTANCE" 
+                              ? "bg-blue-50 text-blue-700" 
+                              : "bg-purple-50 text-purple-700"
+                          }`}>
+                            {ticket.type === "ASSISTANCE" ? "Assistance" : "Intervention"}
+                          </span>
+                          <span className="text-xs text-slate-500 font-mono">#{ticket.id}</span>
+                        </div>
 
-                      <select
-                        onChange={(e) => handleStatusChange(ticket.id, e.target.value)}
-                        value={ticket.statut}
-                        className="border border-amber-200 rounded-xl px-2 py-1 text-sm bg-white"
-                      >
-                        <option value="OPEN">Ouvert</option>
-                        <option value="IN_PROGRESS">En cours</option>
-                        <option value="CLOSED">Clôturé</option>
-                      </select>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        ))}
+                        <Link
+                          href={`/dashboard/admin-tickets/${ticket.id}`}
+                          className="block text-sm font-medium text-slate-800 hover:text-blue-600 transition-colors line-clamp-2 mb-3"
+                        >
+                          {ticket.description}
+                        </Link>
+
+                        <div className="flex flex-col gap-1.5 text-xs mb-3">
+                          <div className="flex items-center gap-1 text-slate-600 truncate">
+                            <span className="text-slate-400">Par:</span>
+                            <span className="truncate">{ticket.createdBy.prenom} {ticket.createdBy.nom}</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-slate-600 truncate">
+                            <span className="text-slate-400">Tech:</span>
+                            <span className="truncate">
+                              {ticket.assignedTo ? `${ticket.assignedTo.prenom} ${ticket.assignedTo.nom}` : "Non assigné"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <AttachmentList ticketId={ticket.id} />
+
+                        <div className="mt-3 grid gap-2">
+                          <select
+                            onChange={(e) => handleAssign(ticket.id, parseInt(e.target.value))}
+                            value={ticket.assignedTo?.id || ""}
+                            className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                          >
+                            <option value="">Assigner</option>
+                            {techniciens.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.prenom} {t.nom}
+                              </option>
+                            ))}
+                          </select>
+
+                          <select
+                            onChange={(e) => handleStatusChange(ticket.id, e.target.value)}
+                            value={ticket.statut}
+                            className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                          >
+                            <option value="OPEN">Ouvert</option>
+                            <option value="IN_PROGRESS"> En cours</option>
+                            <option value="CLOSED">Clôturé</option>
+                          </select>
+
+                          <Link
+                            href={`/dashboard/admin-tickets/${ticket.id}`}
+                            className="text-center px-3 py-1.5 text-xs font-medium rounded-md bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 transition-all shadow-sm"
+                          >
+                            Détails →
+                          </Link>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </main>
     </div>
   );
 }
 
-/** —————————————————————— */
-/**   Sous-composant PJ     */
-/** —————————————————————— */
 function AttachmentList({ ticketId }: { ticketId: number }) {
   const [opened, setOpened] = useState(false);
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState<PieceJointe[]>([]);
+  
   const toggle = async () => {
     if (!opened) {
       setLoading(true);
@@ -296,30 +377,32 @@ function AttachmentList({ ticketId }: { ticketId: number }) {
   };
 
   return (
-    <div className="border border-amber-100 rounded-xl p-2">
+    <div className="border border-slate-200 rounded-md p-2 bg-slate-50">
       <button
         onClick={toggle}
-        className="text-xs underline text-amber-700 hover:no-underline"
+        className="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 transition-colors"
       >
-        {opened ? "Masquer les pièces jointes" : "Voir les pièces jointes"}
+        <span>{opened ? "−" : "+"}</span>
+        {opened ? "Masquer PJ" : "Voir PJ"}
       </button>
       {opened && (
         <div className="mt-2">
-          {loading && <div className="text-xs text-neutral-500">Chargement…</div>}
+          {loading && <div className="text-xs text-slate-500">Chargement…</div>}
           {!loading && list.length === 0 && (
-            <div className="text-xs text-neutral-500">Aucune pièce jointe.</div>
+            <div className="text-xs text-slate-500">Aucune PJ</div>
           )}
           {!loading && list.length > 0 && (
-            <ul className="text-sm space-y-1">
+            <ul className="space-y-1">
               {list.map((f) => (
                 <li key={f.id}>
                   <a
                     href={f.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-amber-700 underline hover:no-underline break-all"
+                    className="text-xs text-blue-600 hover:text-blue-700 hover:underline break-all line-clamp-1"
+                    title={f.nomFichier}
                   >
-                    {f.nomFichier}
+                     {f.nomFichier}
                   </a>
                 </li>
               ))}
