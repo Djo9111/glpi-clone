@@ -1,3 +1,4 @@
+// lib/ticket-mail.ts
 type TicketEmailData = {
   id: number;
   type: "ASSISTANCE" | "INTERVENTION";

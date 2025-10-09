@@ -17,6 +17,7 @@ export async function GET(request: Request) {
     if (payload.role !== "CHEF_DSI") return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
 
     const tickets = await prisma.ticket.findMany({
+      orderBy: { dateCreation: "desc" },
       include: {
         createdBy: { select: { id: true, prenom: true, nom: true } },
         assignedTo: { select: { id: true, prenom: true, nom: true } }
