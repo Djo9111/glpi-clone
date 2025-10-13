@@ -10,7 +10,7 @@ type Ticket = {
   id: number;
   description: string;
   type: "ASSISTANCE" | "INTERVENTION";
-  statut: "OPEN" | "IN_PROGRESS" | "CLOSED";
+  statut: "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "REJETE" | "TRANSFERE_MANTICE" | "CLOSED";
   dateCreation: string;
   createdBy: UserMin;
   assignedTo?: UserMin | null;
@@ -117,10 +117,10 @@ export default function TicketDetailPage() {
         body: JSON.stringify({ assignedToId: technicienId }),
       });
       const data = await res.json();
-      if (!res.ok) { alert(data.error || "Erreur d’assignation"); return; }
+      if (!res.ok) { alert(data.error || "Erreur d'assignation"); return; }
       setTicket(data);
       alert("Technicien assigné !");
-    } catch (e) { console.error(e); alert("Erreur lors de l’assignation"); }
+    } catch (e) { console.error(e); alert("Erreur lors de l'assignation"); }
   };
 
   const handleStatusChange = async (newStatus: Ticket["statut"]) => {
@@ -173,7 +173,7 @@ export default function TicketDetailPage() {
 
       if (!res.ok) {
         setComments((prev) => prev.filter((c) => c.id !== tempId));
-        alert(data.error || "Erreur lors de l’ajout du commentaire");
+        alert(data.error || "Erreur lors de l'ajout du commentaire");
         return;
       }
 
@@ -189,11 +189,52 @@ export default function TicketDetailPage() {
 
   // —— UI HELPERS (pas de hooks ici) ——
   const StatusPill = ({ statut }: { statut: Ticket["statut"] }) => {
-    const map = {
-      OPEN: { bg: "bg-yellow-50", border: "border-yellow-200", text: "text-yellow-700", label: "Ouvert" },
-      IN_PROGRESS: { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700", label: "En cours" },
-      CLOSED: { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700", label: "Clôturé" },
-    }[statut];
+    const statusMap: Record<string, { bg: string; text: string; border: string; label: string }> = {
+      'OPEN': {
+        bg: 'bg-yellow-50',
+        text: 'text-yellow-700',
+        border: 'border-yellow-200',
+        label: 'Ouvert'
+      },
+      'IN_PROGRESS': {
+        bg: 'bg-blue-50',
+        text: 'text-blue-700',
+        border: 'border-blue-200',
+        label: 'En cours'
+      },
+      'A_CLOTURER': {
+        bg: 'bg-purple-50',
+        text: 'text-purple-700',
+        border: 'border-purple-200',
+        label: 'À clôturer'
+      },
+      'REJETE': {
+        bg: 'bg-red-50',
+        text: 'text-red-700',
+        border: 'border-red-200',
+        label: 'Rejeté'
+      },
+      'TRANSFERE_MANTICE': {
+        bg: 'bg-indigo-50',
+        text: 'text-indigo-700',
+        border: 'border-indigo-200',
+        label: 'Transféré MANTICE'
+      },
+      'CLOSED': {
+        bg: 'bg-green-50',
+        text: 'text-green-700',
+        border: 'border-green-200',
+        label: 'Fermé'
+      }
+    };
+
+    const map = statusMap[statut] || {
+      bg: 'bg-gray-50',
+      text: 'text-gray-700',
+      border: 'border-gray-200',
+      label: statut || 'Inconnu'
+    };
+
     return (
       <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${map.bg} ${map.text} border ${map.border}`}>
         {map.label}
@@ -418,7 +459,10 @@ export default function TicketDetailPage() {
               >
                 <option value="OPEN">Ouvert</option>
                 <option value="IN_PROGRESS">En cours</option>
-                <option value="CLOSED">Clôturé</option>
+                <option value="A_CLOTURER">À clôturer</option>
+                <option value="REJETE">Rejeté</option>
+                <option value="TRANSFERE_MANTICE">Transféré MANTICE</option>
+                <option value="CLOSED">Fermé</option>
               </select>
             </div>
           </div>

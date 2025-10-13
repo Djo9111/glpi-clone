@@ -1,3 +1,4 @@
+// app/dashboard/technicien/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -19,11 +20,66 @@ type Ticket = {
   dateCreation?: string;
   createdBy: { id: number; prenom: string; nom: string };
   assignedTo?: { id: number; prenom: string; nom: string } | null;
-  application?: { id: number; nom: string } | null; // NEW
-  materiel?: { id: number; nom: string } | null;    // NEW
+  application?: { id: number; nom: string } | null;
+  materiel?: { id: number; nom: string } | null;
 };
 
 type PieceJointe = { id: number; nomFichier: string; url: string };
+
+/* =========================
+   Helpers statuts (FR + normalisation)
+   ========================= */
+function statusLabel(s: Ticket["statut"]): string {
+  switch (s) {
+    case "OPEN": return "Ouvert";
+    case "IN_PROGRESS": return "En cours";
+    case "A_CLOTURER": return "À clôturer";
+    case "REJETE": return "Rejeté";
+    case "TRANSFERE_MANTICE": return "Transféré MANTICE";
+    case "CLOSED": return "Clôturé";
+    default: return String(s);
+  }
+}
+
+function normalizeStatus(s: unknown): Ticket["statut"] {
+  if (typeof s !== "string") return "OPEN";
+  const k = s.trim().toLowerCase();
+
+  // enums
+  if (k === "open") return "OPEN";
+  if (k === "in_progress" || k === "in-progress") return "IN_PROGRESS";
+  if (k === "a_cloturer" || k === "a-cloturer" || k === "à_clôturer" || k === "à-cloturer") return "A_CLOTURER";
+  if (k === "rejete" || k === "rejeté") return "REJETE";
+  if (k === "transfere_mantice" || k === "transfère_mantice" || k === "transfere-mantice") return "TRANSFERE_MANTICE";
+  if (k === "closed" || k === "close") return "CLOSED";
+
+  // anciens FR (fallback)
+  if (k === "en_attente" || k === "en-attente" || k === "attente" || k === "nouveau") return "OPEN";
+  if (k === "en_cours" || k === "en-cours" || k === "traitement") return "IN_PROGRESS";
+  if (k === "resolu" || k === "résolu" || k === "cloture" || k === "clôturé") return "CLOSED";
+
+  return "OPEN";
+}
+
+function normalizeTicket(raw: any): Ticket {
+  return {
+    id: Number(raw.id),
+    description: String(raw.description ?? ""),
+    type: (raw.type === "INTERVENTION" ? "INTERVENTION" : "ASSISTANCE"),
+    statut: normalizeStatus(raw.statut ?? raw.status),
+    dateCreation: String(raw.dateCreation ?? raw.createdAt ?? new Date().toISOString()),
+    createdBy: {
+      id: Number(raw.createdBy?.id ?? 0),
+      prenom: String(raw.createdBy?.prenom ?? ""),
+      nom: String(raw.createdBy?.nom ?? ""),
+    },
+    assignedTo: raw.assignedTo
+      ? { id: Number(raw.assignedTo.id), prenom: String(raw.assignedTo.prenom ?? ""), nom: String(raw.assignedTo.nom ?? "") }
+      : null,
+    application: raw.application ? { id: Number(raw.application.id), nom: String(raw.application.nom ?? "") } : null,
+    materiel: raw.materiel ? { id: Number(raw.materiel.id), nom: String(raw.materiel.nom ?? "") } : null,
+  };
+}
 
 export default function TechnicianTicketsDashboard() {
   const router = useRouter();
@@ -55,11 +111,22 @@ export default function TechnicianTicketsDashboard() {
     return <span className={`text-xs font-semibold px-2 py-0.5 rounded-md ${map.bg} ${map.text}`}>{map.label}</span>;
   };
 
+  // Tag Application/Matériel (existant)
   const SubTag = ({ t }: { t: Ticket }) => {
     const isApp = t.type === "ASSISTANCE" && t.application?.nom;
     const isMat = t.type === "INTERVENTION" && t.materiel?.nom;
     if (!isApp && !isMat) return null;
     const label = isApp ? `App : ${t.application!.nom}` : `Mat. : ${t.materiel!.nom}`;
+    return (
+      <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-50 text-slate-700 border border-slate-200">
+        {label}
+      </span>
+    );
+  };
+
+  // 🚀 Nouveau : Tag Technicien (comme App/Mat.)
+  const TechTag = ({ t }: { t: Ticket }) => {
+    const label = t.assignedTo ? `Tech : ${t.assignedTo.prenom} ${t.assignedTo.nom}` : "Tech : Non assigné";
     return (
       <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-50 text-slate-700 border border-slate-200">
         {label}
@@ -102,7 +169,8 @@ export default function TechnicianTicketsDashboard() {
         alert(data?.error || "Erreur récupération des tickets");
         return;
       }
-      setTickets(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data.map(normalizeTicket) : [];
+      setTickets(list);
     } catch (e) {
       console.error(e);
       alert("Erreur récupération des tickets");
@@ -129,7 +197,8 @@ export default function TechnicianTicketsDashboard() {
         alert(updated?.error || "Erreur mise à jour du statut");
         return;
       }
-      setTickets((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+      const normalized = normalizeTicket(updated);
+      setTickets((prev) => prev.map((t) => (t.id === normalized.id ? normalized : t)));
     } catch (e) {
       console.error(e);
       alert("Erreur mise à jour du statut");
@@ -208,9 +277,7 @@ export default function TechnicianTicketsDashboard() {
 
       {/* Stats */}
       <section className="mx-auto max-w-[1600px] w-full px-6 pt-6 grid gap-4 grid-cols-3 xl:grid-cols-6">
-        {(
-          Object.keys(groups) as (keyof typeof groups)[]
-        ).map((k) => {
+        {(Object.keys(groups) as (keyof typeof groups)[]).map((k) => {
           const color: Record<string, string> = {
             OPEN: "bg-yellow-50",
             IN_PROGRESS: "bg-blue-50",
@@ -288,9 +355,10 @@ export default function TechnicianTicketsDashboard() {
                           {ticket.description}
                         </Link>
 
-                        {/* Sous-catégorie */}
-                        <div className="mb-2">
+                        {/* Tags : Application/Matériel + Technicien */}
+                        <div className="mb-2 flex flex-wrap gap-2">
                           <SubTag t={ticket} />
+                          <TechTag t={ticket} />
                         </div>
 
                         <div className="flex flex-col gap-1.5 text-xs mb-3">
@@ -313,7 +381,7 @@ export default function TechnicianTicketsDashboard() {
                             className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
                           >
                             {StatusOptions.map((s) => (
-                              <option key={s} value={s}>{s.replace("_", " ")}</option>
+                              <option key={s} value={s}>{statusLabel(s)}</option>
                             ))}
                           </select>
 

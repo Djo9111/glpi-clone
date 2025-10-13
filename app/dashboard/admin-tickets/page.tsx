@@ -1,3 +1,4 @@
+// app/dashboard/admin-tickets/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -29,6 +30,64 @@ type Technicien = {
 };
 
 type PieceJointe = { id: number; nomFichier: string; url: string };
+
+/* =========================
+   Helpers statut (FR + normalisation)
+   ========================= */
+function statusLabel(s: Ticket["statut"]): string {
+  switch (s) {
+    case "OPEN": return "Ouvert";
+    case "IN_PROGRESS": return "En cours";
+    case "A_CLOTURER": return "À clôturer";
+    case "REJETE": return "Rejeté";
+    case "TRANSFERE_MANTICE": return "Transféré MANTICE";
+    case "CLOSED": return "Clôturé";
+    default: return String(s);
+  }
+}
+
+// tolère d’anciens libellés FR si l’API en renvoie encore
+function normalizeStatus(s: unknown): Ticket["statut"] {
+  if (typeof s !== "string") return "OPEN";
+  const k = s.trim().toLowerCase();
+
+  // enums “propres”
+  if (k === "open") return "OPEN";
+  if (k === "in_progress" || k === "in-progress") return "IN_PROGRESS";
+  if (k === "a_cloturer" || k === "a-cloturer" || k === "à_clôturer" || k === "à-clôturer") return "A_CLOTURER";
+  if (k === "rejete" || k === "rejeté") return "REJETE";
+  if (k === "transfere_mantice" || k === "transfère_mantice" || k === "transfere-mantice") return "TRANSFERE_MANTICE";
+  if (k === "closed" || k === "close") return "CLOSED";
+
+  // anciens FR
+  if (k === "en_attente" || k === "en-attente" || k === "attente" || k === "nouveau") return "OPEN";
+  if (k === "en_cours" || k === "en-cours" || k === "traitement") return "IN_PROGRESS";
+  if (k === "a_cloturer" || k === "à_clôturer") return "A_CLOTURER";
+  if (k === "rejete" || k === "rejeté") return "REJETE";
+  if (k === "transfere_mantice" || k === "transféré_mantice") return "TRANSFERE_MANTICE";
+  if (k === "resolu" || k === "résolu" || k === "cloture" || k === "clôturé") return "CLOSED";
+
+  return "OPEN";
+}
+
+function normalizeTicket(raw: any): Ticket {
+  return {
+    id: Number(raw.id),
+    description: String(raw.description ?? ""),
+    type: (raw.type === "INTERVENTION" ? "INTERVENTION" : "ASSISTANCE"),
+    statut: normalizeStatus(raw.statut ?? raw.status),
+    createdBy: {
+      id: Number(raw.createdBy?.id ?? 0),
+      prenom: String(raw.createdBy?.prenom ?? ""),
+      nom: String(raw.createdBy?.nom ?? ""),
+    },
+    assignedTo: raw.assignedTo
+      ? { id: Number(raw.assignedTo.id), prenom: String(raw.assignedTo.prenom ?? ""), nom: String(raw.assignedTo.nom ?? "") }
+      : null,
+    application: raw.application ? { id: Number(raw.application.id), nom: String(raw.application.nom ?? "") } : null,
+    materiel: raw.materiel ? { id: Number(raw.materiel.id), nom: String(raw.materiel.nom ?? "") } : null,
+  };
+}
 
 export default function AdminTicketsDashboard() {
   const router = useRouter();
@@ -64,7 +123,8 @@ export default function AdminTicketsDashboard() {
         fetch("/api/admin/techniciens", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }),
       ]);
       const [ticketsData, techsData] = await Promise.all([ticketsRes.json(), techsRes.json()]);
-      setTickets(Array.isArray(ticketsData) ? ticketsData : []);
+      const list = Array.isArray(ticketsData) ? ticketsData.map(normalizeTicket) : [];
+      setTickets(list);
       setTechniciens(Array.isArray(techsData) ? techsData : []);
     } catch (err) {
       console.error(err);
@@ -95,7 +155,7 @@ export default function AdminTicketsDashboard() {
         return;
       }
 
-      const updatedTicket = await res.json();
+      const updatedTicket = normalizeTicket(await res.json());
       setTickets((prev) => prev.map((t) => (t.id === ticketId ? updatedTicket : t)));
       alert("Technicien assigné !");
     } catch (error) {
@@ -124,7 +184,7 @@ export default function AdminTicketsDashboard() {
         return;
       }
 
-      const updatedTicket = await res.json();
+      const updatedTicket = normalizeTicket(await res.json());
       setTickets((prev) => prev.map((t) => (t.id === ticketId ? updatedTicket : t)));
       alert("Statut mis à jour !");
     } catch (error) {
@@ -319,7 +379,7 @@ export default function AdminTicketsDashboard() {
                             className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
                           >
                             {StatusOptions.map((s) => (
-                              <option key={s} value={s}>{s.replace("_", " ")}</option>
+                              <option key={s} value={s}>{statusLabel(s)}</option>
                             ))}
                           </select>
 

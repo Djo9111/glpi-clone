@@ -32,6 +32,43 @@ type CommentItem = {
 type Application = { id: number; nom: string };
 type Materiel = { id: number; nom: string };
 
+/** Normalise tous les statuts possibles (anciens FR & nouveaux Prisma) vers OPEN | IN_PROGRESS | CLOSED */
+function normalizeStatus(s: unknown): "OPEN" | "IN_PROGRESS" | "CLOSED" {
+  if (typeof s !== "string") return "OPEN";
+  const k = s.trim().toLowerCase();
+
+  // Nouveaux (Prisma) – on laisse tel quel
+  if (k === "open") return "OPEN";
+  if (k === "in_progress" || k === "in-progress") return "IN_PROGRESS";
+  if (k === "closed" || k === "close") return "CLOSED";
+
+  // Anciens (FR)
+  if (k === "en_attente" || k === "en-attente" || k === "attente" || k === "nouveau") return "OPEN";
+  if (k === "en_cours" || k === "en-cours" || k === "traitement") return "IN_PROGRESS";
+  if (k === "resolu" || k === "résolu" || k === "cloture" || k === "clôturé" || k === "cloturé") return "CLOSED";
+
+  // Valeur par défaut sûre
+  return "OPEN";
+}
+
+/** Normalise un ticket reçu de l'API (clé `statut` ou `status`) */
+function normalizeTicket(raw: any): Ticket {
+  return {
+    id: Number(raw.id),
+    description: String(raw.description ?? ""),
+    type: (raw.type === "INTERVENTION" ? "INTERVENTION" : "ASSISTANCE") as "ASSISTANCE" | "INTERVENTION",
+    statut: normalizeStatus(raw.statut ?? raw.status),
+    dateCreation: String(raw.dateCreation ?? raw.createdAt ?? new Date().toISOString()),
+    assignedTo: raw.assignedTo
+      ? {
+          id: Number(raw.assignedTo.id),
+          prenom: String(raw.assignedTo.prenom ?? ""),
+          nom: String(raw.assignedTo.nom ?? ""),
+        }
+      : null,
+  };
+}
+
 export default function EmployeeDashboard() {
   const router = useRouter();
   const [user, setUser] = useState<{ id: number; nom: string; prenom: string; role: string } | null>(null);
@@ -92,7 +129,9 @@ export default function EmployeeDashboard() {
         alert(data.error || "Erreur récupération de vos demandes");
         return;
       }
-      setTickets(data);
+      const list = Array.isArray(data) ? data : [];
+      const normalized: Ticket[] = list.map(normalizeTicket);
+      setTickets(normalized);
     } catch (e) {
       console.error(e);
       alert("Erreur récupération de vos demandes");
