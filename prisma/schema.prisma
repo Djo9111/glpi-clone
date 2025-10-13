@@ -13,9 +13,21 @@ enum Role {
   CHEF_DSI
 }
 
+/// Niveau hiérarchique interne (distinct des rôles d’accès)
+enum Hierarchie {
+  EMPLOYE
+  RESPONSABLE_SERVICE
+  CHEF_SERVICE
+  DGA
+  DG
+}
+
 enum Statut {
   OPEN
   IN_PROGRESS
+  A_CLOTURER // nouveau
+  REJETE // nouveau
+  TRANSFERE_MANTICE // nouveau
   CLOSED
 }
 
@@ -25,41 +37,82 @@ enum TypeTicket {
 }
 
 model Departement {
-  id       Int           @id @default(autoincrement())
-  nom      String        @unique
-  employes Utilisateur[]
-  tickets  Ticket[] // relation inverse
+  id            Int           @id @default(autoincrement())
+  nom           String        @unique
+  employes      Utilisateur[]
+  tickets       Ticket[]
+  responsableId Int?
+  responsable   Utilisateur?  @relation("DepartementResponsable", fields: [responsableId], references: [id])
 }
 
 model Utilisateur {
-  id                  Int            @id @default(autoincrement())
-  nom                 String
-  prenom              String
-  email               String         @unique
-  motDePasse          String
-  role                Role           @default(EMPLOYE)
-  matricule           String?        @unique
-  departementId       Int?
-  departement         Departement?   @relation(fields: [departementId], references: [id])
+  id            Int          @id @default(autoincrement())
+  nom           String
+  prenom        String
+  email         String       @unique
+  motDePasse    String
+  role          Role         @default(EMPLOYE)
+  matricule     String?      @unique
+  departementId Int?
+  departement   Departement? @relation(fields: [departementId], references: [id])
+
+  // déjà existants
   tickets             Ticket[]       @relation("EmployeTickets")
   ticketsAssignes     Ticket[]       @relation("TechnicienTickets")
   notifications       Notification[]
   createdAt           DateTime       @default(now())
   commentairesRediges Commentaire[]  @relation("CommentaireAuteur")
+
+  // AJOUT côté opposé de la relation responsable
+  departementsResponsables Departement[] @relation("DepartementResponsable")
+}
+
+model Application {
+  id      Int      @id @default(autoincrement())
+  nom     String   @unique // ex: Word, Lotus, Delta, CDSNet, Kaspersky, etc.
+  tickets Ticket[]
+}
+
+model Materiel {
+  id      Int      @id @default(autoincrement())
+  nom     String   @unique // ex: PC, Imprimante, Scanner, UC, etc.
+  tickets Ticket[]
 }
 
 model Ticket {
-  id            Int            @id @default(autoincrement())
-  description   String
-  dateCreation  DateTime       @default(now())
-  statut        Statut         @default(OPEN)
-  type          TypeTicket
-  createdById   Int
-  createdBy     Utilisateur    @relation("EmployeTickets", fields: [createdById], references: [id])
-  assignedToId  Int?
-  assignedTo    Utilisateur?   @relation("TechnicienTickets", fields: [assignedToId], references: [id])
+  id           Int        @id @default(autoincrement())
+  description  String
+  dateCreation DateTime   @default(now())
+  statut       Statut     @default(OPEN)
+  type         TypeTicket
+
+  createdById Int
+  createdBy   Utilisateur @relation("EmployeTickets", fields: [createdById], references: [id])
+
+  assignedToId Int?
+  assignedTo   Utilisateur? @relation("TechnicienTickets", fields: [assignedToId], references: [id])
+
   departementId Int?
-  departement   Departement?   @relation(fields: [departementId], references: [id])
+  departement   Departement? @relation(fields: [departementId], references: [id])
+
+  /// Spécifique au type :
+  /// - si type = ASSISTANCE -> applicationId (facultatif mais recommandé)
+  applicationId Int?
+  application   Application? @relation(fields: [applicationId], references: [id])
+
+  /// - si type = INTERVENTION -> materielId (facultatif mais recommandé)
+  materielId Int?
+  materiel   Materiel? @relation(fields: [materielId], references: [id])
+
+  /// Suivi du temps (calculable)
+  prisEnChargeAt         DateTime? // quand le ticket passe en IN_PROGRESS
+  clotureAt              DateTime? // quand il passe en CLOSED
+  dureeTraitementMinutes Int? // snapshot à la clôture (ou MAJ périodique)
+
+  /// Escalade MANTICE
+  manticeNumero String? // numéro MANTICE rattaché
+  manticeAt     DateTime? // date de transfert vers MANTICE
+
   notifications Notification[]
   piecesJointes PieceJointe[]
   commentaires  Commentaire[]
@@ -85,7 +138,7 @@ model Notification {
   dateEnvoi DateTime    @default(now())
   ticketId  Int
   ticket    Ticket      @relation(fields: [ticketId], references: [id])
-  userId    Int // destinataire
+  userId    Int
   user      Utilisateur @relation(fields: [userId], references: [id])
   isRead    Boolean     @default(false)
 }
