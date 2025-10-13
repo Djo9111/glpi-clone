@@ -20,7 +20,9 @@ export async function GET(request: Request) {
       orderBy: { dateCreation: "desc" },
       include: {
         createdBy: { select: { id: true, prenom: true, nom: true } },
-        assignedTo: { select: { id: true, prenom: true, nom: true } }
+        assignedTo: { select: { id: true, prenom: true, nom: true } },
+        application: true,
+        materiel: true
       }
     });
 

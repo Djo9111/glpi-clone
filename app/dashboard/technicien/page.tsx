@@ -1,4 +1,3 @@
-// app/dashboard/technicien/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -10,10 +9,18 @@ type Ticket = {
   id: number;
   description: string;
   type: "ASSISTANCE" | "INTERVENTION";
-  statut: "OPEN" | "IN_PROGRESS" | "CLOSED";
+  statut:
+    | "OPEN"
+    | "IN_PROGRESS"
+    | "A_CLOTURER"
+    | "REJETE"
+    | "TRANSFERE_MANTICE"
+    | "CLOSED";
   dateCreation?: string;
   createdBy: { id: number; prenom: string; nom: string };
   assignedTo?: { id: number; prenom: string; nom: string } | null;
+  application?: { id: number; nom: string } | null; // NEW
+  materiel?: { id: number; nom: string } | null;    // NEW
 };
 
 type PieceJointe = { id: number; nomFichier: string; url: string };
@@ -24,11 +31,13 @@ export default function TechnicianTicketsDashboard() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // --- UI helpers (pas de hooks ici) ---
   const StatusPill = ({ statut }: { statut: Ticket["statut"] }) => {
     const map = {
       OPEN: { bg: "bg-yellow-50", border: "border-yellow-200", text: "text-yellow-700", label: "Ouvert" },
       IN_PROGRESS: { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700", label: "En cours" },
+      A_CLOTURER: { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700", label: "À clôturer" },
+      REJETE: { bg: "bg-rose-50", border: "border-rose-200", text: "text-rose-700", label: "Rejeté" },
+      TRANSFERE_MANTICE: { bg: "bg-violet-50", border: "border-violet-200", text: "text-violet-700", label: "Transféré MANTICE" },
       CLOSED: { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700", label: "Clôturé" },
     }[statut];
     return (
@@ -46,7 +55,19 @@ export default function TechnicianTicketsDashboard() {
     return <span className={`text-xs font-semibold px-2 py-0.5 rounded-md ${map.bg} ${map.text}`}>{map.label}</span>;
   };
 
-  // --- Auth guard ---
+  const SubTag = ({ t }: { t: Ticket }) => {
+    const isApp = t.type === "ASSISTANCE" && t.application?.nom;
+    const isMat = t.type === "INTERVENTION" && t.materiel?.nom;
+    if (!isApp && !isMat) return null;
+    const label = isApp ? `App : ${t.application!.nom}` : `Mat. : ${t.materiel!.nom}`;
+    return (
+      <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-50 text-slate-700 border border-slate-200">
+        {label}
+      </span>
+    );
+  };
+
+  // Auth guard
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -66,13 +87,12 @@ export default function TechnicianTicketsDashboard() {
     }
   }, [router]);
 
-  // --- Data ---
+  // Data
   const fetchTickets = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
     setLoading(true);
     try {
-      // Retourne uniquement les tickets assignés au technicien connecté côté API
       const res = await fetch("/api/technicien/tickets", {
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
@@ -120,17 +140,28 @@ export default function TechnicianTicketsDashboard() {
     () => ({
       OPEN: tickets.filter((t) => t.statut === "OPEN"),
       IN_PROGRESS: tickets.filter((t) => t.statut === "IN_PROGRESS"),
+      A_CLOTURER: tickets.filter((t) => t.statut === "A_CLOTURER"),
+      REJETE: tickets.filter((t) => t.statut === "REJETE"),
+      TRANSFERE_MANTICE: tickets.filter((t) => t.statut === "TRANSFERE_MANTICE"),
       CLOSED: tickets.filter((t) => t.statut === "CLOSED"),
     }),
     [tickets]
   );
+
+  const StatusOptions: Ticket["statut"][] = [
+    "OPEN",
+    "IN_PROGRESS",
+    "A_CLOTURER",
+    "REJETE",
+    "TRANSFERE_MANTICE",
+    "CLOSED",
+  ];
 
   const handleLogout = () => {
     localStorage.removeItem("token");
     router.push("/login");
   };
 
-  // --- Loading gate ---
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-50">
@@ -144,7 +175,7 @@ export default function TechnicianTicketsDashboard() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      {/* Header (aligné au style admin) */}
+      {/* Header */}
       <header className="sticky top-0 z-50 backdrop-blur-md bg-white/80 border-b border-slate-200/60 shadow-sm">
         <div className="mx-auto max-w-[1600px] px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -152,7 +183,9 @@ export default function TechnicianTicketsDashboard() {
             <div className="h-8 w-px bg-slate-200"></div>
             <div>
               <h1 className="text-lg font-semibold text-slate-800">Gestion des tickets</h1>
-              <p className="text-xs text-slate-500">Tableau de bord technicien — {user.prenom} {user.nom}</p>
+              <p className="text-xs text-slate-500">
+                Tableau de bord technicien — {user.prenom} {user.nom}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -173,69 +206,60 @@ export default function TechnicianTicketsDashboard() {
         </div>
       </header>
 
-      {/* Statistiques compactes (identique admin) */}
-      <section className="mx-auto max-w-[1600px] w-full px-6 pt-6 grid gap-4 grid-cols-3">
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs font-semibold text-slate-500 uppercase">Ouverts</div>
-              <div className="mt-1 text-2xl font-bold text-slate-900">{groups.OPEN.length}</div>
+      {/* Stats */}
+      <section className="mx-auto max-w-[1600px] w-full px-6 pt-6 grid gap-4 grid-cols-3 xl:grid-cols-6">
+        {(
+          Object.keys(groups) as (keyof typeof groups)[]
+        ).map((k) => {
+          const color: Record<string, string> = {
+            OPEN: "bg-yellow-50",
+            IN_PROGRESS: "bg-blue-50",
+            A_CLOTURER: "bg-amber-50",
+            REJETE: "bg-rose-50",
+            TRANSFERE_MANTICE: "bg-violet-50",
+            CLOSED: "bg-emerald-50",
+          };
+          const label: Record<string, string> = {
+            OPEN: "Ouverts",
+            IN_PROGRESS: "En cours",
+            A_CLOTURER: "À clôturer",
+            REJETE: "Rejetés",
+            TRANSFERE_MANTICE: "Transférés MANTICE",
+            CLOSED: "Clôturés",
+          };
+          return (
+            <div key={k} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-semibold text-slate-500 uppercase">{label[k]}</div>
+                  <div className="mt-1 text-2xl font-bold text-slate-900">{groups[k].length}</div>
+                </div>
+                <div className={`p-2 rounded-lg ${color[k]}`} />
+              </div>
             </div>
-            <div className="p-2 rounded-lg bg-yellow-50" />
-          </div>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs font-semibold text-slate-500 uppercase">En cours</div>
-              <div className="mt-1 text-2xl font-bold text-slate-900">{groups.IN_PROGRESS.length}</div>
-            </div>
-            <div className="p-2 rounded-lg bg-blue-50" />
-          </div>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs font-semibold text-slate-500 uppercase">Clôturés</div>
-              <div className="mt-1 text-2xl font-bold text-slate-900">{groups.CLOSED.length}</div>
-            </div>
-            <div className="p-2 rounded-lg bg-emerald-50" />
-          </div>
-        </div>
+          );
+        })}
       </section>
 
-      {/* Kanban — même layout que l'admin, sans assignation */}
-      <main className="mx-auto max-w-[1600px] w-full px-6 pb-10 pt-6 grid gap-4 grid-cols-3">
-        {(["OPEN", "IN_PROGRESS", "CLOSED"] as const).map((column) => {
-          const columnConfig = {
-            OPEN: {
-              label: "Ouverts",
-              bgClass: "bg-yellow-50",
-              borderClass: "border-yellow-200",
-              textClass: "text-yellow-700",
-            },
-            IN_PROGRESS: {
-              label: "En cours",
-              bgClass: "bg-blue-50",
-              borderClass: "border-blue-200",
-              textClass: "text-blue-700",
-            },
-            CLOSED: {
-              label: "Clôturés",
-              bgClass: "bg-emerald-50",
-              borderClass: "border-emerald-200",
-              textClass: "text-emerald-700",
-            },
-          } as const;
-
-          const config = columnConfig[column];
+      {/* Kanban */}
+      <main className="mx-auto max-w-[1600px] w-full px-6 pb-10 pt-6 grid gap-4 grid-cols-1 md:grid-cols-3 xl:grid-cols-6">
+        {(Object.keys(groups) as (keyof typeof groups)[]).map((column) => {
+          const meta: Record<string, { label: string; bg: string; border: string; text: string }> = {
+            OPEN: { label: "Ouverts", bg: "bg-yellow-50", border: "border-yellow-200", text: "text-yellow-700" },
+            IN_PROGRESS: { label: "En cours", bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700" },
+            A_CLOTURER: { label: "À clôturer", bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700" },
+            REJETE: { label: "Rejetés", bg: "bg-rose-50", border: "border-rose-200", text: "text-rose-700" },
+            TRANSFERE_MANTICE: { label: "Transférés MANTICE", bg: "bg-violet-50", border: "border-violet-200", text: "text-violet-700" },
+            CLOSED: { label: "Clôturés", bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700" },
+          };
+          const config = meta[column];
           const list = groups[column];
 
           return (
             <div key={column} className="rounded-lg border border-slate-200 bg-white shadow-sm flex flex-col">
-              <div className={`flex items-center justify-between px-4 py-3 border-b ${config.borderClass} ${config.bgClass} rounded-t-lg`}>
-                <h2 className={`text-sm font-bold ${config.textClass}`}>{config.label}</h2>
-                <span className={`text-xs font-semibold ${config.textClass} px-2 py-0.5 rounded-full ${config.bgClass} border ${config.borderClass}`}>
+              <div className={`flex items-center justify-between px-4 py-3 border-b ${config.border} ${config.bg} rounded-t-lg`}>
+                <h2 className={`text-sm font-bold ${config.text}`}>{config.label}</h2>
+                <span className={`text-xs font-semibold ${config.text} px-2 py-0.5 rounded-full ${config.bg} border ${config.border}`}>
                   {list.length}
                 </span>
               </div>
@@ -259,10 +283,15 @@ export default function TechnicianTicketsDashboard() {
 
                         <Link
                           href={`/dashboard/technicien/${ticket.id}`}
-                          className="block text-sm font-medium text-slate-800 hover:text-blue-600 transition-colors line-clamp-2 mb-3"
+                          className="block text-sm font-medium text-slate-800 hover:text-blue-600 transition-colors line-clamp-2 mb-2"
                         >
                           {ticket.description}
                         </Link>
+
+                        {/* Sous-catégorie */}
+                        <div className="mb-2">
+                          <SubTag t={ticket} />
+                        </div>
 
                         <div className="flex flex-col gap-1.5 text-xs mb-3">
                           <div className="flex items-center gap-1 text-slate-600 truncate">
@@ -283,9 +312,9 @@ export default function TechnicianTicketsDashboard() {
                             value={ticket.statut}
                             className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
                           >
-                            <option value="OPEN">Ouvert</option>
-                            <option value="IN_PROGRESS">En cours</option>
-                            <option value="CLOSED">Clôturé</option>
+                            {StatusOptions.map((s) => (
+                              <option key={s} value={s}>{s.replace("_", " ")}</option>
+                            ))}
                           </select>
 
                           <div className="flex gap-2">
@@ -294,6 +323,18 @@ export default function TechnicianTicketsDashboard() {
                               className="text-xs px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 transition"
                             >
                               Marquer en cours
+                            </button>
+                            <button
+                              onClick={() => handleStatusChange(ticket.id, "A_CLOTURER")}
+                              className="text-xs px-3 py-1.5 rounded-md border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 transition"
+                            >
+                              À clôturer
+                            </button>
+                            <button
+                              onClick={() => handleStatusChange(ticket.id, "TRANSFERE_MANTICE")}
+                              className="text-xs px-3 py-1.5 rounded-md border border-violet-200 bg-violet-50 hover:bg-violet-100 text-violet-700 transition"
+                            >
+                              Transférer MANTICE
                             </button>
                             <button
                               onClick={() => handleStatusChange(ticket.id, "CLOSED")}

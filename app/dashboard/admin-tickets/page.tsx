@@ -1,4 +1,3 @@
-// app/dashboard/admin-tickets/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -9,10 +8,18 @@ import NotificationBell from "@/app/components/NotificationBell";
 type Ticket = {
   id: number;
   description: string;
-  type: string;
-  statut: string;
+  type: "ASSISTANCE" | "INTERVENTION";
+  statut:
+    | "OPEN"
+    | "IN_PROGRESS"
+    | "A_CLOTURER"
+    | "REJETE"
+    | "TRANSFERE_MANTICE"
+    | "CLOSED";
   createdBy: { id: number; prenom: string; nom: string };
   assignedTo?: { id: number; prenom: string; nom: string } | null;
+  application?: { id: number; nom: string } | null; // NEW
+  materiel?: { id: number; nom: string } | null;    // NEW
 };
 
 type Technicien = {
@@ -97,7 +104,7 @@ export default function AdminTicketsDashboard() {
     }
   };
 
-  const handleStatusChange = async (ticketId: number, newStatus: string) => {
+  const handleStatusChange = async (ticketId: number, newStatus: Ticket["statut"]) => {
     const token = localStorage.getItem("token");
     if (!token) return;
 
@@ -131,10 +138,14 @@ export default function AdminTicketsDashboard() {
     router.push("/login");
   };
 
+  // Groupes Kanban (6 colonnes)
   const groups = useMemo(
     () => ({
       OPEN: tickets.filter((t) => t.statut === "OPEN"),
       IN_PROGRESS: tickets.filter((t) => t.statut === "IN_PROGRESS"),
+      A_CLOTURER: tickets.filter((t) => t.statut === "A_CLOTURER"),
+      REJETE: tickets.filter((t) => t.statut === "REJETE"),
+      TRANSFERE_MANTICE: tickets.filter((t) => t.statut === "TRANSFERE_MANTICE"),
       CLOSED: tickets.filter((t) => t.statut === "CLOSED"),
     }),
     [tickets]
@@ -149,17 +160,43 @@ export default function AdminTicketsDashboard() {
     </div>
   );
 
+  const ColumnMeta: Record<keyof typeof groups, { label: string; bg: string; border: string; text: string }> = {
+    OPEN: { label: "Ouverts", bg: "bg-yellow-50", border: "border-yellow-200", text: "text-yellow-700" },
+    IN_PROGRESS: { label: "En cours", bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700" },
+    A_CLOTURER: { label: "À clôturer", bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700" },
+    REJETE: { label: "Rejetés", bg: "bg-rose-50", border: "border-rose-200", text: "text-rose-700" },
+    TRANSFERE_MANTICE: { label: "Transférés MANTICE", bg: "bg-violet-50", border: "border-violet-200", text: "text-violet-700" },
+    CLOSED: { label: "Clôturés", bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700" },
+  };
+
+  const StatusOptions: Ticket["statut"][] = [
+    "OPEN",
+    "IN_PROGRESS",
+    "A_CLOTURER",
+    "REJETE",
+    "TRANSFERE_MANTICE",
+    "CLOSED",
+  ];
+
+  const SubTag = ({ t }: { t: Ticket }) => {
+    const isApp = t.type === "ASSISTANCE" && t.application?.nom;
+    const isMat = t.type === "INTERVENTION" && t.materiel?.nom;
+    if (!isApp && !isMat) return null;
+    const label = isApp ? `App : ${t.application!.nom}` : `Mat. : ${t.materiel!.nom}`;
+    return (
+      <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-50 text-slate-700 border border-slate-200">
+        {label}
+      </span>
+    );
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      {/* Header moderne avec logo */}
+      {/* Header */}
       <header className="sticky top-0 z-50 backdrop-blur-md bg-white/80 border-b border-slate-200/60 shadow-sm">
         <div className="mx-auto max-w-[1600px] px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <img 
-              src="/cds.png" 
-              alt="CDS Logo" 
-              className="h-10 w-auto"
-            />
+            <img src="/cds.png" alt="CDS Logo" className="h-10 w-auto" />
             <div className="h-8 w-px bg-slate-200"></div>
             <div>
               <h1 className="text-lg font-semibold text-slate-800">Gestion des tickets</h1>
@@ -184,80 +221,32 @@ export default function AdminTicketsDashboard() {
         </div>
       </header>
 
-      {/* Statistiques compactes */}
-      <section className="mx-auto max-w-[1600px] w-full px-6 pt-6 grid gap-4 grid-cols-3">
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs font-semibold text-slate-500 uppercase">Ouverts</div>
-              <div className="mt-1 text-2xl font-bold text-slate-900">{groups.OPEN.length}</div>
-            </div>
-            <div className="p-2 rounded-lg bg-yellow-50">
-              <span className="text-xl"></span>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs font-semibold text-slate-500 uppercase">En cours</div>
-              <div className="mt-1 text-2xl font-bold text-slate-900">{groups.IN_PROGRESS.length}</div>
-            </div>
-            <div className="p-2 rounded-lg bg-blue-50">
-              <span className="text-xl"></span>
+      {/* Stats rapides */}
+      <section className="mx-auto max-w-[1600px] w-full px-6 pt-6 grid gap-4 grid-cols-3 xl:grid-cols-6">
+        {(
+          Object.keys(groups) as (keyof typeof groups)[]
+        ).map((k) => (
+          <div key={k} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs font-semibold text-slate-500 uppercase">{ColumnMeta[k].label}</div>
+                <div className="mt-1 text-2xl font-bold text-slate-900">{groups[k].length}</div>
+              </div>
+              <div className={`p-2 rounded-lg ${ColumnMeta[k].bg}`} />
             </div>
           </div>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs font-semibold text-slate-500 uppercase">Clôturés</div>
-              <div className="mt-1 text-2xl font-bold text-slate-900">{groups.CLOSED.length}</div>
-            </div>
-            <div className="p-2 rounded-lg bg-emerald-50">
-              <span className="text-xl"></span>
-            </div>
-          </div>
-        </div>
+        ))}
       </section>
 
-      {/* Kanban Board - Layout optimisé */}
-      <main className="mx-auto max-w-[1600px] w-full px-6 pb-10 pt-6 grid gap-4 grid-cols-3">
-        {(["OPEN", "IN_PROGRESS", "CLOSED"] as const).map((column) => {
-          const columnConfig = {
-            OPEN: { 
-              label: "Ouverts", 
-              icon: "",
-              bgClass: "bg-yellow-50",
-              borderClass: "border-yellow-200",
-              textClass: "text-yellow-700"
-            },
-            IN_PROGRESS: { 
-              label: "En cours", 
-              icon: "",
-              bgClass: "bg-blue-50",
-              borderClass: "border-blue-200",
-              textClass: "text-blue-700"
-            },
-            CLOSED: { 
-              label: "Clôturés", 
-              icon: "",
-              bgClass: "bg-emerald-50",
-              borderClass: "border-emerald-200",
-              textClass: "text-emerald-700"
-            },
-          };
-          
-          const config = columnConfig[column];
-
+      {/* Kanban */}
+      <main className="mx-auto max-w-[1600px] w-full px-6 pb-10 pt-6 grid gap-4 grid-cols-1 md:grid-cols-3 xl:grid-cols-6">
+        {(Object.keys(groups) as (keyof typeof groups)[]).map((column) => {
+          const config = ColumnMeta[column];
           return (
             <div key={column} className="rounded-lg border border-slate-200 bg-white shadow-sm flex flex-col">
-              <div className={`flex items-center justify-between px-4 py-3 border-b ${config.borderClass} ${config.bgClass} rounded-t-lg`}>
-                <h2 className={`text-sm font-bold ${config.textClass} flex items-center gap-2`}>
-                  <span>{config.icon}</span>
-                  {config.label}
-                </h2>
-                <span className={`text-xs font-semibold ${config.textClass} px-2 py-0.5 rounded-full ${config.bgClass} border ${config.borderClass}`}>
+              <div className={`flex items-center justify-between px-4 py-3 border-b ${config.border} ${config.bg} rounded-t-lg`}>
+                <h2 className={`text-sm font-bold ${config.text}`}>{config.label}</h2>
+                <span className={`text-xs font-semibold ${config.text} px-2 py-0.5 rounded-full ${config.bg} border ${config.border}`}>
                   {groups[column].length}
                 </span>
               </div>
@@ -276,9 +265,7 @@ export default function AdminTicketsDashboard() {
                       >
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-md ${
-                            ticket.type === "ASSISTANCE" 
-                              ? "bg-blue-50 text-blue-700" 
-                              : "bg-purple-50 text-purple-700"
+                            ticket.type === "ASSISTANCE" ? "bg-blue-50 text-blue-700" : "bg-purple-50 text-purple-700"
                           }`}>
                             {ticket.type === "ASSISTANCE" ? "Assistance" : "Intervention"}
                           </span>
@@ -287,10 +274,15 @@ export default function AdminTicketsDashboard() {
 
                         <Link
                           href={`/dashboard/admin-tickets/${ticket.id}`}
-                          className="block text-sm font-medium text-slate-800 hover:text-blue-600 transition-colors line-clamp-2 mb-3"
+                          className="block text-sm font-medium text-slate-800 hover:text-blue-600 transition-colors line-clamp-2 mb-2"
                         >
                           {ticket.description}
                         </Link>
+
+                        {/* Sous-catégorie */}
+                        <div className="mb-2">
+                          <SubTag t={ticket} />
+                        </div>
 
                         <div className="flex flex-col gap-1.5 text-xs mb-3">
                           <div className="flex items-center gap-1 text-slate-600 truncate">
@@ -322,13 +314,13 @@ export default function AdminTicketsDashboard() {
                           </select>
 
                           <select
-                            onChange={(e) => handleStatusChange(ticket.id, e.target.value)}
+                            onChange={(e) => handleStatusChange(ticket.id, e.target.value as Ticket["statut"])}
                             value={ticket.statut}
                             className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
                           >
-                            <option value="OPEN">Ouvert</option>
-                            <option value="IN_PROGRESS"> En cours</option>
-                            <option value="CLOSED">Clôturé</option>
+                            {StatusOptions.map((s) => (
+                              <option key={s} value={s}>{s.replace("_", " ")}</option>
+                            ))}
                           </select>
 
                           <Link
