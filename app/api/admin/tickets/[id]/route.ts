@@ -18,13 +18,13 @@ function getUser(request: Request) {
 // GET /api/admin/tickets/[id]
 export async function GET(
   _req: Request,
-  ctx: { params: Promise<{ id: string }> } // ⬅️ params est async
+  ctx: { params: Promise<{ id: string }> }
 ) {
   const payload = getUser(_req);
   if (!payload) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   if (payload.role !== "CHEF_DSI") return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
 
-  const { id } = await ctx.params;          // ⬅️ on attend params
+  const { id } = await ctx.params;
   const ticketId = Number(id);
   if (!Number.isFinite(ticketId)) {
     return NextResponse.json({ error: "Paramètre invalide" }, { status: 400 });
@@ -36,6 +36,8 @@ export async function GET(
       createdBy: { select: { id: true, prenom: true, nom: true } },
       assignedTo: { select: { id: true, prenom: true, nom: true } },
       departement: { select: { id: true, nom: true } },
+      application: { select: { id: true, nom: true } },  // ✅ Ajout
+      materiel: { select: { id: true, nom: true } },     // ✅ Ajout
     },
   });
   if (!ticket) return NextResponse.json({ error: "Ticket introuvable" }, { status: 404 });
@@ -46,13 +48,13 @@ export async function GET(
 // PATCH /api/admin/tickets/[id]
 export async function PATCH(
   req: Request,
-  ctx: { params: Promise<{ id: string }> }  // ⬅️ idem
+  ctx: { params: Promise<{ id: string }> }
 ) {
   const payload = getUser(req);
   if (!payload) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   if (payload.role !== "CHEF_DSI") return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
 
-  const { id } = await ctx.params;          // ⬅️ on attend params
+  const { id } = await ctx.params;
   const ticketId = Number(id);
   if (!Number.isFinite(ticketId)) {
     return NextResponse.json({ error: "Paramètre invalide" }, { status: 400 });
@@ -60,7 +62,7 @@ export async function PATCH(
 
   const body = await req.json() as {
     assignedToId?: number | null;
-    statut?: "OPEN" | "IN_PROGRESS" | "CLOSED";
+    statut?: "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "REJETE" | "TRANSFERE_MANTICE" | "CLOSED";
   };
 
   try {
@@ -78,10 +80,12 @@ export async function PATCH(
         createdBy: { select: { id: true, prenom: true, nom: true } },
         assignedTo: { select: { id: true, prenom: true, nom: true } },
         departement: { select: { id: true, nom: true } },
+        application: { select: { id: true, nom: true } },  // ✅ Ajout
+        materiel: { select: { id: true, nom: true } },     // ✅ Ajout
       },
     });
 
-    // Notifier le technicien en cas d’assignation
+    // Notifier le technicien en cas d'assignation
     if (body.assignedToId) {
       await prisma.notification.create({
         data: {

@@ -4,19 +4,22 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { ArrowLeft, RefreshCw, Send, FileText, MessageSquare, Settings, PlayCircle, CheckCircle2, XCircle } from "lucide-react";
 
 type UserMin = { id: number; prenom: string; nom: string };
 type Ticket = {
   id: number;
   description: string;
   type: "ASSISTANCE" | "INTERVENTION";
-  statut: "OPEN" | "IN_PROGRESS" | "CLOSED";
+  statut: "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "REJETE" | "TRANSFERE_MANTICE" | "CLOSED";
   dateCreation: string;
   createdBy: UserMin;
   assignedTo?: UserMin | null;
+  application?: { id: number; nom: string } | null;
+  materiel?: { id: number; nom: string } | null;
+  departement?: { id: number; nom: string } | null;
 };
 type PieceJointe = { id: number; nomFichier: string; url: string };
-
 type CommentItem = {
   id: number;
   contenu: string;
@@ -36,28 +39,6 @@ export default function TechTicketDetail() {
   const [loading, setLoading] = useState(true);
   const [loadingPj, setLoadingPj] = useState(false);
 
-  // Helpers UI (pas de hooks)
-  const StatusPill = ({ statut }: { statut: Ticket["statut"] }) => {
-    const map = {
-      OPEN: { bg: "bg-yellow-50", border: "border-yellow-200", text: "text-yellow-700", label: "Ouvert" },
-      IN_PROGRESS: { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700", label: "En cours" },
-      CLOSED: { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700", label: "Clôturé" },
-    }[statut];
-    return (
-      <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${map.bg} ${map.text} border ${map.border}`}>
-        {map.label}
-      </span>
-    );
-  };
-  const TypeTag = ({ type }: { type: Ticket["type"] }) => {
-    const map = {
-      ASSISTANCE: { bg: "bg-blue-50", text: "text-blue-700", label: "Assistance" },
-      INTERVENTION: { bg: "bg-purple-50", text: "text-purple-700", label: "Intervention" },
-    }[type];
-    return <span className={`text-xs font-semibold px-2 py-0.5 rounded-md ${map.bg} ${map.text}`}>{map.label}</span>;
-  };
-
-  // Auth + rôle TECHNICIEN
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) { router.push("/login"); return; }
@@ -134,6 +115,7 @@ export default function TechTicketDetail() {
       const data = await res.json();
       if (!res.ok) { alert(data.error || "Erreur statut"); return; }
       setTicket(data);
+      alert("Statut mis à jour !");
     } catch (e) {
       console.error(e);
       alert("Erreur lors de la mise à jour du statut");
@@ -166,7 +148,7 @@ export default function TechTicketDetail() {
       const data = await res.json();
       if (!res.ok) {
         setComments(prev => prev.filter(c => c.id !== tempId));
-        alert(data.error || "Erreur lors de l’ajout du commentaire");
+        alert(data.error || "Erreur lors de l'ajout du commentaire");
         return;
       }
       setComments(prev => prev.map(c => (c.id === tempId ? data : c)));
@@ -184,9 +166,27 @@ export default function TechTicketDetail() {
     router.push("/login");
   };
 
-  if (!user) {
+  const StatusBadge = ({ status }: { status: Ticket["statut"] }) => {
+    const config = {
+      OPEN: { label: "Ouvert", className: "bg-amber-100 text-amber-800 border-amber-200" },
+      IN_PROGRESS: { label: "En cours", className: "bg-blue-100 text-blue-800 border-blue-200" },
+      A_CLOTURER: { label: "À clôturer", className: "bg-violet-100 text-violet-800 border-violet-200" },
+      REJETE: { label: "Rejeté", className: "bg-rose-100 text-rose-800 border-rose-200" },
+      TRANSFERE_MANTICE: { label: "Transféré", className: "bg-indigo-100 text-indigo-800 border-indigo-200" },
+      CLOSED: { label: "Clôturé", className: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+    };
+
+    const { label, className } = config[status];
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-50">
+      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${className}`}>
+        {label}
+      </span>
+    );
+  };
+
+  if (!user || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
           <p className="text-slate-600">Chargement…</p>
@@ -194,49 +194,44 @@ export default function TechTicketDetail() {
       </div>
     );
   }
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-50">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
-          <p className="text-slate-600">Chargement du ticket…</p>
-        </div>
-      </div>
-    );
-  }
+
   if (!ticket) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-50">
-        <p className="text-center text-red-600">Ticket introuvable.</p>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <p className="text-red-600 font-medium">Ticket introuvable</p>
+          <Link href="/dashboard/technicien" className="text-blue-600 hover:underline mt-2 inline-block">
+            Retour à la liste
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      {/* Header aligné */}
-      <header className="sticky top-0 z-50 backdrop-blur-md bg-white/80 border-b border-slate-200/60 shadow-sm">
-        <div className="mx-auto max-w-[1600px] px-6 py-4 flex items-center justify-between">
+    <div className="min-h-screen flex flex-col bg-slate-50">
+      {/* Header */}
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-sm">
+        <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <img src="/cds.png" alt="CDS Logo" className="h-10 w-auto" />
-            <div className="h-8 w-px bg-slate-200"></div>
+            <img src="/cds.png" alt="CDS" className="h-8 w-auto" />
+            <div className="h-6 w-px bg-slate-200" />
             <div>
-              <h1 className="text-lg font-semibold text-slate-800">Ticket #{ticket.id}</h1>
-              <p className="text-xs text-slate-500">
-                Créé le {new Date(ticket.dateCreation).toLocaleString()}
-              </p>
+              <h1 className="text-lg font-semibold text-slate-900">Détail du Ticket</h1>
+              <p className="text-sm text-slate-500">Ticket #{ticket.id}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Link
               href="/dashboard/technicien"
-              className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
             >
-              ← Retour
+              <ArrowLeft className="h-4 w-4" />
+              Retour
             </Link>
             <button
               onClick={handleLogout}
-              className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 active:scale-[.98] shadow-sm transition-all"
+              className="px-4 py-2 text-sm font-medium rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors"
             >
               Déconnexion
             </button>
@@ -244,153 +239,255 @@ export default function TechTicketDetail() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1600px] w-full px-6 pt-6 pb-10 grid gap-4 md:grid-cols-3">
-        {/* Colonne gauche : détails + PJ + commentaires */}
-        <section className="md:col-span-2 space-y-4">
-          {/* Détails */}
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <TypeTag type={ticket.type} />
-                <StatusPill statut={ticket.statut} />
+      {/* Contenu */}
+      <main className="mx-auto max-w-7xl w-full px-6 py-6 grid gap-6 lg:grid-cols-3">
+        {/* Colonne principale */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Carte principale du ticket */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-6">
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      ticket.type === "ASSISTANCE"
+                        ? "bg-blue-100 text-blue-800"
+                        : "bg-purple-100 text-purple-800"
+                    }`}>
+                      {ticket.type === "ASSISTANCE" ? "Assistance" : "Intervention"}
+                    </span>
+                    <StatusBadge status={ticket.statut} />
+                  </div>
+                  <h2 className="text-xl font-semibold text-slate-900 mb-2">
+                    {ticket.description}
+                  </h2>
+                </div>
               </div>
-              <span className="text-xs text-slate-500 font-mono">#{ticket.id}</span>
-            </div>
-            <p className="mt-3 text-slate-800 whitespace-pre-wrap">{ticket.description}</p>
-            <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
-              <span className="rounded-full bg-slate-50 border border-slate-200 px-2 py-0.5">
-                Créé par {ticket.createdBy.prenom} {ticket.createdBy.nom}
-              </span>
-              {ticket.assignedTo && (
-                <span className="rounded-full bg-slate-50 border border-slate-200 px-2 py-0.5">
-                  Assigné à {ticket.assignedTo.prenom} {ticket.assignedTo.nom}
+
+              {/* Métadonnées */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                  Créé par: {ticket.createdBy.prenom} {ticket.createdBy.nom}
                 </span>
-              )}
+                {ticket.assignedTo && (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                    Assigné à: {ticket.assignedTo.prenom} {ticket.assignedTo.nom}
+                  </span>
+                )}
+                {ticket.application?.nom && (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                    App: {ticket.application.nom}
+                  </span>
+                )}
+                {ticket.materiel?.nom && (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
+                    Matériel: {ticket.materiel.nom}
+                  </span>
+                )}
+                {ticket.departement?.nom && (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                    Dépt: {ticket.departement.nom}
+                  </span>
+                )}
+              </div>
+
+              <div className="text-xs text-slate-500">
+                Créé le {new Date(ticket.dateCreation).toLocaleString("fr-FR")}
+              </div>
             </div>
           </div>
 
           {/* Pièces jointes */}
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-800">Pièces jointes</h3>
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-slate-600" />
+                <h3 className="text-base font-semibold text-slate-900">Pièces jointes</h3>
+              </div>
               <button
                 onClick={fetchTicketAndPj}
-                className="text-xs rounded-md border border-slate-200 bg-white px-2 py-1 hover:bg-slate-50 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 bg-white hover:bg-slate-50 transition-colors"
               >
+                <RefreshCw className="h-3.5 w-3.5" />
                 Rafraîchir
               </button>
             </div>
 
-            {loadingPj && <div className="mt-2 text-xs text-slate-500">Chargement…</div>}
+            <div className="p-6">
+              {loadingPj && <div className="text-sm text-slate-500">Chargement…</div>}
 
-            {!loadingPj && pjs.length === 0 && (
-              <div className="mt-2 text-sm text-slate-500 border-2 border-dashed border-slate-200 rounded-lg p-4">
-                Aucune pièce jointe.
-              </div>
-            )}
+              {!loadingPj && pjs.length === 0 && (
+                <div className="text-center py-8 border-2 border-dashed border-slate-200 rounded-lg">
+                  <FileText className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                  <p className="text-sm text-slate-500">Aucune pièce jointe</p>
+                </div>
+              )}
 
-            {!loadingPj && pjs.length > 0 && (
-              <ul className="mt-3 space-y-1">
-                {pjs.map((f) => (
-                  <li key={f.id}>
-                    <a
-                      href={f.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-sm text-blue-700 hover:text-blue-800 hover:underline break-all"
-                      title={f.nomFichier}
-                    >
-                       {f.nomFichier}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
+              {!loadingPj && pjs.length > 0 && (
+                <ul className="space-y-2">
+                  {pjs.map((f) => (
+                    <li key={f.id} className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
+                      <FileText className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                      <a
+                        href={f.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm text-blue-600 hover:text-blue-700 hover:underline truncate flex-1"
+                        title={f.nomFichier}
+                      >
+                        {f.nomFichier}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
 
           {/* Commentaires */}
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-800">Commentaires</h3>
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-5 w-5 text-slate-600" />
+                <h3 className="text-base font-semibold text-slate-900">Commentaires</h3>
+                <span className="text-xs text-slate-500">({comments.length})</span>
+              </div>
               <button
                 onClick={fetchTicketAndPj}
-                className="text-xs rounded-md border border-slate-200 bg-white px-2 py-1 hover:bg-slate-50 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 bg-white hover:bg-slate-50 transition-colors"
               >
+                <RefreshCw className="h-3.5 w-3.5" />
                 Rafraîchir
               </button>
             </div>
 
-            {comments.length === 0 ? (
-              <div className="mt-2 text-sm text-slate-500">Aucun commentaire.</div>
-            ) : (
-              <ul className="mt-3 space-y-2">
-                {comments.map((c) => (
-                  <li key={c.id} className="rounded-md border border-slate-200 px-3 py-2">
-                    <div className="text-xs text-slate-500">
-                      {new Date(c.createdAt).toLocaleString()} — {c.auteur.prenom} {c.auteur.nom}
-                    </div>
-                    <div className="text-sm whitespace-pre-wrap text-slate-800">{c.contenu}</div>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <div className="p-6">
+              {comments.length === 0 ? (
+                <div className="text-center py-8">
+                  <MessageSquare className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                  <p className="text-sm text-slate-500">Aucun commentaire</p>
+                </div>
+              ) : (
+                <ul className="space-y-3 mb-6">
+                  {comments.map((c) => (
+                    <li key={c.id} className="p-4 rounded-lg border border-slate-200 bg-slate-50">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-slate-900">
+                          {c.auteur.prenom} {c.auteur.nom}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          {new Date(c.createdAt).toLocaleString("fr-FR")}
+                        </span>
+                      </div>
+                      <p className="text-sm text-slate-700 whitespace-pre-wrap">{c.contenu}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
 
-            {/* Formulaire */}
-            <div className="mt-3">
-              <label className="text-xs text-slate-600">Ajouter un commentaire</label>
-              <textarea
-                value={commentInput}
-                onChange={(e) => setCommentInput(e.target.value)}
-                className="mt-1 w-full min-h-[90px] border border-slate-300 rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
-                placeholder="Ex.: Diagnostic, étapes réalisées, suites prévues…"
-                maxLength={4000}
-              />
-              <div className="mt-2 flex items-center justify-between">
-                <span className="text-xs text-slate-400">{commentInput.length} / 4000</span>
-                <button
-                  onClick={handleAddComment}
-                  disabled={sending || commentInput.trim().length < 2}
-                  className="px-3 py-2 text-sm font-medium rounded-md bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 disabled:opacity-50 shadow-sm transition-all"
-                >
-                  {sending ? "Envoi…" : "Publier"}
-                </button>
+              {/* Formulaire d'ajout */}
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-slate-700">
+                  Ajouter un commentaire
+                </label>
+                <textarea
+                  value={commentInput}
+                  onChange={(e) => setCommentInput(e.target.value)}
+                  className="w-full min-h-[120px] border border-slate-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  placeholder="Ex: Diagnostic, étapes réalisées, suites prévues…"
+                  maxLength={4000}
+                />
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-400">{commentInput.length} / 4000</span>
+                  <button
+                    onClick={handleAddComment}
+                    disabled={sending || commentInput.trim().length < 2}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <Send className="h-4 w-4" />
+                    {sending ? "Envoi…" : "Publier"}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </section>
+        </div>
 
-        {/* Colonne droite : actions */}
-        <aside className="space-y-4">
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <h3 className="text-sm font-semibold text-slate-800">Actions</h3>
-            <div className="mt-3 grid gap-2">
-              <label className="text-xs text-slate-600">Changer le statut</label>
-              <select
-                value={ticket.statut}
-                onChange={(e) => handleStatusChange(e.target.value as Ticket["statut"])}
-                className="border border-slate-300 rounded-md px-2 py-1.5 text-sm bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
-              >
-                <option value="OPEN">Ouvert</option>
-                <option value="IN_PROGRESS">En cours</option>
-                <option value="CLOSED">Clôturé</option>
-              </select>
+        {/* Colonne latérale - Actions */}
+        <aside className="space-y-6">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+            <div className="px-6 py-4 border-b border-slate-200">
+              <div className="flex items-center gap-2">
+                <Settings className="h-5 w-5 text-slate-600" />
+                <h3 className="text-base font-semibold text-slate-900">Gestion</h3>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Changer le statut
+                </label>
+                <select
+                  value={ticket.statut}
+                  onChange={(e) => handleStatusChange(e.target.value as Ticket["statut"])}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                >
+                  <option value="OPEN">Ouvert</option>
+                  <option value="IN_PROGRESS">En cours</option>
+                  <option value="A_CLOTURER">À clôturer</option>
+                  <option value="REJETE">Rejeté</option>
+                  <option value="TRANSFERE_MANTICE">Transféré MANTICE</option>
+                  <option value="CLOSED">Clôturé</option>
+                </select>
+              </div>
+
+              {/* Actions rapides */}
+              <div className="pt-2">
+                <p className="text-sm font-medium text-slate-700 mb-3">Actions rapides</p>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => handleStatusChange("IN_PROGRESS")}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+                  >
+                    <PlayCircle className="h-4 w-4" />
+                    Marquer en cours
+                  </button>
+                  <button
+                    onClick={() => handleStatusChange("A_CLOTURER")}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100 transition-colors"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    À clôturer
+                  </button>
+                  <button
+                    onClick={() => handleStatusChange("CLOSED")}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+                  >
+                    <XCircle className="h-4 w-4" />
+                    Clôturer
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <h3 className="text-sm font-semibold text-slate-800">Navigation</h3>
-            <div className="mt-3 grid gap-2">
-              <Link
-                href={`/dashboard/technicien/${ticket.id}`}
-                className="text-center px-3 py-2 text-sm font-medium rounded-md bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 transition-all shadow-sm"
+          {/* Raccourcis */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+            <h3 className="text-sm font-semibold text-slate-900 mb-4">Raccourcis</h3>
+            <div className="space-y-2">
+              <button
+                onClick={fetchTicketAndPj}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 bg-white hover:bg-slate-50 transition-colors"
               >
-                Actualiser la page
-              </Link>
+                <RefreshCw className="h-4 w-4" />
+                Actualiser
+              </button>
               <Link
                 href="/dashboard/technicien"
-                className="text-center px-3 py-2 text-sm font-medium rounded-md border border-slate-200 bg-white hover:bg-slate-50 transition-all shadow-sm"
+                className="block text-center px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 bg-white hover:bg-slate-50 transition-colors"
               >
-                Retour à la liste →
+                Liste des tickets
               </Link>
             </div>
           </div>

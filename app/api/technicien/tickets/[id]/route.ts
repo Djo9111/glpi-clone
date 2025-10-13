@@ -18,13 +18,13 @@ function getTech(req: Request) {
 // GET /api/technicien/tickets/[id]
 export async function GET(
   req: Request,
-  ctx: { params: Promise<{ id: string }> } // 👈 params est async
+  ctx: { params: Promise<{ id: string }> }
 ) {
   const payload = getTech(req);
   if (!payload) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   if (payload.role !== "TECHNICIEN") return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
 
-  const { id } = await ctx.params;          // 👈 on attend params
+  const { id } = await ctx.params;
   const ticketId = Number(id);
   if (!Number.isFinite(ticketId)) {
     return NextResponse.json({ error: "Paramètre invalide" }, { status: 400 });
@@ -36,6 +36,9 @@ export async function GET(
     include: {
       createdBy: { select: { id: true, prenom: true, nom: true } },
       assignedTo: { select: { id: true, prenom: true, nom: true } },
+      application: { select: { id: true, nom: true } },  // ✅ Ajout
+      materiel: { select: { id: true, nom: true } },     // ✅ Ajout
+      departement: { select: { id: true, nom: true } },  // ✅ Ajout (bonus)
     },
   });
 
@@ -46,22 +49,26 @@ export async function GET(
 // PATCH /api/technicien/tickets/[id]
 export async function PATCH(
   req: Request,
-  ctx: { params: Promise<{ id: string }> } // 👈 idem
+  ctx: { params: Promise<{ id: string }> }
 ) {
   const payload = getTech(req);
   if (!payload) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   if (payload.role !== "TECHNICIEN") return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
 
-  const { id } = await ctx.params;          // 👈 on attend params
+  const { id } = await ctx.params;
   const ticketId = Number(id);
   if (!Number.isFinite(ticketId)) {
     return NextResponse.json({ error: "Paramètre invalide" }, { status: 400 });
   }
 
-  const body = await req.json() as { statut?: "OPEN" | "IN_PROGRESS" | "CLOSED" };
+  const body = await req.json() as { 
+    statut?: "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "REJETE" | "TRANSFERE_MANTICE" | "CLOSED" 
+  };
 
   // Le technicien peut modifier uniquement un ticket qui lui est assigné
-  const exists = await prisma.ticket.findFirst({ where: { id: ticketId, assignedToId: payload.id } });
+  const exists = await prisma.ticket.findFirst({ 
+    where: { id: ticketId, assignedToId: payload.id } 
+  });
   if (!exists) return NextResponse.json({ error: "Ticket introuvable" }, { status: 404 });
 
   const updated = await prisma.ticket.update({
@@ -70,6 +77,9 @@ export async function PATCH(
     include: {
       createdBy: { select: { id: true, prenom: true, nom: true } },
       assignedTo: { select: { id: true, prenom: true, nom: true } },
+      application: { select: { id: true, nom: true } },  // ✅ Ajout
+      materiel: { select: { id: true, nom: true } },     // ✅ Ajout
+      departement: { select: { id: true, nom: true } },  // ✅ Ajout (bonus)
     },
   });
 
