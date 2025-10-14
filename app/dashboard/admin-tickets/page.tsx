@@ -307,10 +307,10 @@ export default function AdminTicketsDashboard() {
           <div className="flex items-center gap-3">
             <NotificationBell />
             <Link
-              href="/dashboard/admin"
+              href="/dashboard/admin-entities"
               className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
             >
-              Créer utilisateur
+              Administration
             </Link>
             <button
               onClick={handleLogout}
