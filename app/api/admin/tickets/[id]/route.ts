@@ -1,6 +1,6 @@
 // app/api/admin/tickets/[id]/route.ts
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Statut } from "@prisma/client";
 import jwt from "jsonwebtoken";
 
 export const runtime = "nodejs";
@@ -36,8 +36,8 @@ export async function GET(
       createdBy: { select: { id: true, prenom: true, nom: true } },
       assignedTo: { select: { id: true, prenom: true, nom: true } },
       departement: { select: { id: true, nom: true } },
-      application: { select: { id: true, nom: true } },  // ✅ Ajout
-      materiel: { select: { id: true, nom: true } },     // ✅ Ajout
+      application: { select: { id: true, nom: true } },
+      materiel: { select: { id: true, nom: true } },
     },
   });
   if (!ticket) return NextResponse.json({ error: "Ticket introuvable" }, { status: 404 });
@@ -66,26 +66,54 @@ export async function PATCH(
   };
 
   try {
+    // Lire l'état actuel pour calculs
+    const current = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!current) return NextResponse.json({ error: "Ticket introuvable" }, { status: 404 });
+
+    const data: any = {};
+    const now = new Date();
+
+    // Gestion assignation/désassignation
+    if (typeof body.assignedToId !== "undefined") {
+      data.assignedTo = body.assignedToId
+        ? { connect: { id: body.assignedToId } }
+        : { disconnect: true };
+    }
+
+    // Transitions de statut
+    if (body.statut) {
+      data.statut = body.statut as Statut;
+
+      // (1) Passage à IN_PROGRESS → initialiser prisEnChargeAt si manquant
+      if (body.statut === "IN_PROGRESS" && !current.prisEnChargeAt) {
+        data.prisEnChargeAt = now;
+      }
+
+      // (2) Passage à CLOSED → enregistrer clotureAt + durée
+      if (body.statut === "CLOSED" && current.statut !== Statut.CLOSED) {
+        const start = current.prisEnChargeAt ?? current.dateCreation;
+        const dureeTraitementMinutes = Math.max(
+          0,
+          Math.round((now.getTime() - new Date(start).getTime()) / 60000)
+        );
+        data.clotureAt = now;
+        data.dureeTraitementMinutes = dureeTraitementMinutes;
+      }
+    }
+
     const updated = await prisma.ticket.update({
       where: { id: ticketId },
-      data: {
-        ...(typeof body.assignedToId !== "undefined"
-          ? (body.assignedToId
-              ? { assignedTo: { connect: { id: body.assignedToId } } }
-              : { assignedTo: { disconnect: true } })
-          : {}),
-        ...(body.statut ? { statut: body.statut } : {}),
-      },
+      data,
       include: {
         createdBy: { select: { id: true, prenom: true, nom: true } },
         assignedTo: { select: { id: true, prenom: true, nom: true } },
         departement: { select: { id: true, nom: true } },
-        application: { select: { id: true, nom: true } },  // ✅ Ajout
-        materiel: { select: { id: true, nom: true } },     // ✅ Ajout
+        application: { select: { id: true, nom: true } },
+        materiel: { select: { id: true, nom: true } },
       },
     });
 
-    // Notifier le technicien en cas d'assignation
+    // Notification d’assignation si besoin
     if (body.assignedToId) {
       await prisma.notification.create({
         data: {

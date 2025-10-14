@@ -7,15 +7,17 @@ import { useRouter } from "next/navigation";
 type TicketForm = {
   description: string;
   typeTicket: "ASSISTANCE" | "INTERVENTION";
-  applicationId?: number | ""; // nouveau
-  materielId?: number | "";    // nouveau
+  applicationId?: number | "";
+  materielId?: number | "";
 };
+
+type TicketStatut = "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "CLOSED";
 
 type Ticket = {
   id: number;
   description: string;
   type: "ASSISTANCE" | "INTERVENTION";
-  statut: "OPEN" | "IN_PROGRESS" | "CLOSED";
+  statut: TicketStatut;
   dateCreation: string;
   assignedTo?: { id: number; prenom: string; nom: string } | null;
 };
@@ -28,26 +30,26 @@ type CommentItem = {
   auteur: { id: number; prenom: string; nom: string };
 };
 
-// nouveaux types
 type Application = { id: number; nom: string };
 type Materiel = { id: number; nom: string };
 
-/** Normalise tous les statuts possibles (anciens FR & nouveaux Prisma) vers OPEN | IN_PROGRESS | CLOSED */
-function normalizeStatus(s: unknown): "OPEN" | "IN_PROGRESS" | "CLOSED" {
+/** Normalise tous les statuts possibles vers OPEN | IN_PROGRESS | A_CLOTURER | CLOSED */
+function normalizeStatus(s: unknown): TicketStatut {
   if (typeof s !== "string") return "OPEN";
   const k = s.trim().toLowerCase();
 
-  // Nouveaux (Prisma) – on laisse tel quel
+  // Nouveaux (Prisma)
   if (k === "open") return "OPEN";
   if (k === "in_progress" || k === "in-progress") return "IN_PROGRESS";
+  if (k === "a_cloturer" || k === "a-cloturer" || k === "à_clôturer" || k === "à-cloturer") return "A_CLOTURER";
   if (k === "closed" || k === "close") return "CLOSED";
 
   // Anciens (FR)
   if (k === "en_attente" || k === "en-attente" || k === "attente" || k === "nouveau") return "OPEN";
   if (k === "en_cours" || k === "en-cours" || k === "traitement") return "IN_PROGRESS";
-  if (k === "resolu" || k === "résolu" || k === "cloture" || k === "clôturé" || k === "cloturé") return "CLOSED";
+  if (k === "resolu" || k === "résolu") return "A_CLOTURER"; // Souvent “résolu” => prêt à clôturer côté employé
+  if (k === "cloture" || k === "clôturé" || k === "cloturé") return "CLOSED";
 
-  // Valeur par défaut sûre
   return "OPEN";
 }
 
@@ -82,13 +84,12 @@ export default function EmployeeDashboard() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // nouvelles listes
   const [applications, setApplications] = useState<Application[]>([]);
   const [materiels, setMateriels] = useState<Materiel[]>([]);
   const [loadingCats, setLoadingCats] = useState(false);
 
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "OPEN" | "IN_PROGRESS" | "CLOSED">("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | TicketStatut>("ALL");
   const [page, setPage] = useState(1);
   const pageSize = 8;
   const [selected, setSelected] = useState<Ticket | null>(null);
@@ -170,7 +171,6 @@ export default function EmployeeDashboard() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    // caster proprement pour les ids
     if (name === "applicationId" || name === "materielId") {
       setTicketForm((f) => ({ ...f, [name]: value === "" ? "" : Number(value) }));
       return;
@@ -180,7 +180,6 @@ export default function EmployeeDashboard() {
       setTicketForm((f) => ({
         ...f,
         typeTicket: nextType,
-        // reset la sous-catégorie quand on change de type
         applicationId: nextType === "ASSISTANCE" ? f.applicationId : "",
         materielId: nextType === "INTERVENTION" ? f.materielId : "",
       }));
@@ -203,7 +202,6 @@ export default function EmployeeDashboard() {
       const fd = new FormData();
       fd.append("description", ticketForm.description);
       fd.append("typeTicket", ticketForm.typeTicket);
-      // envoyer l'id si présent et cohérent avec le type
       if (ticketForm.typeTicket === "ASSISTANCE" && ticketForm.applicationId) {
         fd.append("applicationId", String(ticketForm.applicationId));
       }
@@ -247,6 +245,7 @@ export default function EmployeeDashboard() {
     router.push("/login");
   };
 
+  // Filtrage & pagination
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return tickets.filter((t) => {
@@ -272,18 +271,22 @@ export default function EmployeeDashboard() {
 
   const displayName = user ? `${user.prenom} ${user.nom}` : "…";
 
+  // Mise à jour locale après changement de statut (utilisée par le drawer)
+  const handleLocalStatusUpdated = (id: number, newStatut: TicketStatut) => {
+    setTickets((prev) => prev.map((t) => (t.id === id ? { ...t, statut: newStatut } : t)));
+    setSelected((prev) => (prev && prev.id === id ? { ...prev, statut: newStatut } : prev));
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      {/* Header moderne avec logo */}
+      {/* Header */}
       <header className="sticky top-0 z-50 backdrop-blur-md bg-white/80 border-b border-slate-200/60 shadow-sm">
         <div className="px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-4">
             <img src="/cds.png" alt="CDS Logo" className="h-10 w-auto" />
             <div className="h-8 w-px bg-slate-200"></div>
             <div>
-              <h1 className="font-semibold text-lg text-slate-800">
-                Bienvenue, {displayName}
-              </h1>
+              <h1 className="font-semibold text-lg text-slate-800">Bienvenue, {displayName}</h1>
               <p className="text-xs text-slate-500">Portail de support technique</p>
             </div>
           </div>
@@ -311,7 +314,6 @@ export default function EmployeeDashboard() {
                 setTicketForm((f) => ({
                   ...f,
                   typeTicket: "ASSISTANCE",
-                  // reset l’autre sous-catégorie
                   materielId: "",
                 }))
               }
@@ -322,27 +324,14 @@ export default function EmployeeDashboard() {
               }`}
             >
               <div className="flex items-start gap-3">
-                <div
-                  className={`mt-0.5 p-2 rounded-lg ${
-                    ticketForm.typeTicket === "ASSISTANCE" ? "bg-blue-100" : "bg-slate-100"
-                  }`}
-                >
-                  <svg
-                    className={`w-5 h-5 ${
-                      ticketForm.typeTicket === "ASSISTANCE" ? "text-blue-600" : "text-slate-600"
-                    }`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
+                <div className={`mt-0.5 p-2 rounded-lg ${ticketForm.typeTicket === "ASSISTANCE" ? "bg-blue-100" : "bg-slate-100"}`}>
+                  <svg className={`w-5 h-5 ${ticketForm.typeTicket === "ASSISTANCE" ? "text-blue-600" : "text-slate-600"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
                 </div>
                 <div className="flex-1">
                   <h3 className="text-base font-semibold text-slate-800 mb-1">Assistance</h3>
-                  <p className="text-sm text-slate-600 leading-relaxed">
-                    Besoin logiciel ou bureautique (Word, Lotus, Delta, etc.)
-                  </p>
+                  <p className="text-sm text-slate-600 leading-relaxed">Besoin logiciel ou bureautique (Word, Lotus, Delta, etc.)</p>
                 </div>
               </div>
             </div>
@@ -352,7 +341,6 @@ export default function EmployeeDashboard() {
                 setTicketForm((f) => ({
                   ...f,
                   typeTicket: "INTERVENTION",
-                  // reset l’autre sous-catégorie
                   applicationId: "",
                 }))
               }
@@ -363,19 +351,8 @@ export default function EmployeeDashboard() {
               }`}
             >
               <div className="flex items-start gap-3">
-                <div
-                  className={`mt-0.5 p-2 rounded-lg ${
-                    ticketForm.typeTicket === "INTERVENTION" ? "bg-purple-100" : "bg-slate-100"
-                  }`}
-                >
-                  <svg
-                    className={`w-5 h-5 ${
-                      ticketForm.typeTicket === "INTERVENTION" ? "text-purple-600" : "text-slate-600"
-                    }`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
+                <div className={`mt-0.5 p-2 rounded-lg ${ticketForm.typeTicket === "INTERVENTION" ? "bg-purple-100" : "bg-slate-100"}`}>
+                  <svg className={`w-5 h-5 ${ticketForm.typeTicket === "INTERVENTION" ? "text-purple-600" : "text-slate-600"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
@@ -392,9 +369,7 @@ export default function EmployeeDashboard() {
           <div className="grid gap-2 mb-4">
             {ticketForm.typeTicket === "ASSISTANCE" && (
               <>
-                <label className="text-sm font-medium text-slate-700">
-                  Application (optionnel)
-                </label>
+                <label className="text-sm font-medium text-slate-700">Application (optionnel)</label>
                 <select
                   name="applicationId"
                   value={ticketForm.applicationId ?? ""}
@@ -413,9 +388,7 @@ export default function EmployeeDashboard() {
             )}
             {ticketForm.typeTicket === "INTERVENTION" && (
               <>
-                <label className="text-sm font-medium text-slate-700">
-                  Matériel (optionnel)
-                </label>
+                <label className="text-sm font-medium text-slate-700">Matériel (optionnel)</label>
                 <select
                   name="materielId"
                   value={ticketForm.materielId ?? ""}
@@ -451,9 +424,7 @@ export default function EmployeeDashboard() {
             </div>
 
             <div className="grid gap-2">
-              <label htmlFor="fileInput" className="text-sm font-medium text-slate-700">
-                Joindre des fichiers
-              </label>
+              <label htmlFor="fileInput" className="text-sm font-medium text-slate-700">Joindre des fichiers</label>
               <input
                 id="fileInput"
                 name="files"
@@ -475,9 +446,7 @@ export default function EmployeeDashboard() {
                   ))}
                 </ul>
               )}
-              <p className="text-xs text-slate-500">
-                Formats : PDF, images, Office, TXT/LOG • Max 10 Mo par fichier, 5 fichiers
-              </p>
+              <p className="text-xs text-slate-500">Formats : PDF, images, Office, TXT/LOG • Max 10 Mo par fichier, 5 fichiers</p>
             </div>
 
             <button
@@ -510,14 +479,13 @@ export default function EmployeeDashboard() {
               />
               <select
                 value={statusFilter}
-                onChange={(e) =>
-                  setStatusFilter(e.target.value as "ALL" | "OPEN" | "IN_PROGRESS" | "CLOSED")
-                }
+                onChange={(e) => setStatusFilter(e.target.value as "ALL" | TicketStatut)}
                 className="h-10 rounded-lg border border-slate-300 px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
               >
                 <option value="ALL">Tous</option>
                 <option value="OPEN">Ouverts</option>
                 <option value="IN_PROGRESS">En cours</option>
+                <option value="A_CLOTURER">À clôturer</option>
                 <option value="CLOSED">Clôturés</option>
               </select>
               <button
@@ -615,16 +583,22 @@ export default function EmployeeDashboard() {
           )}
         </div>
 
-        <TicketDrawer ticket={selected} onClose={() => setSelected(null)} user={user} />
+        <TicketDrawer
+          ticket={selected}
+          onClose={() => setSelected(null)}
+          user={user}
+          onStatusUpdated={handleLocalStatusUpdated}
+        />
       </main>
     </div>
   );
 }
 
-function StatusChip({ statut }: { statut: "OPEN" | "IN_PROGRESS" | "CLOSED" }) {
+function StatusChip({ statut }: { statut: TicketStatut }) {
   const map = {
     OPEN: { label: "Ouvert", cls: "bg-yellow-50 text-yellow-700 border-yellow-300", icon: "" },
     IN_PROGRESS: { label: "En cours", cls: "bg-blue-50 text-blue-700 border-blue-300", icon: "" },
+    A_CLOTURER: { label: "À clôturer", cls: "bg-violet-50 text-violet-700 border-violet-300", icon: "" },
     CLOSED: { label: "Clôturé", cls: "bg-emerald-50 text-emerald-700 border-emerald-300", icon: "" },
   } as const;
   const s = map[statut];
@@ -640,10 +614,12 @@ function TicketDrawer({
   ticket,
   onClose,
   user,
+  onStatusUpdated,
 }: {
   ticket: Ticket | null;
   onClose: () => void;
   user: { id: number; prenom: string; nom: string; role: string } | null;
+  onStatusUpdated: (id: number, newStatut: TicketStatut) => void;
 }) {
   const [pj, setPj] = useState<PieceJointe[]>([]);
   const [comments, setComments] = useState<CommentItem[]>([]);
@@ -651,6 +627,7 @@ function TicketDrawer({
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
+  const [closing, setClosing] = useState(false);
 
   useEffect(() => {
     let abort = false;
@@ -697,8 +674,17 @@ function TicketDrawer({
   }, [ticket]);
 
   if (!ticket) return null;
-  const step = ticket.statut === "CLOSED" ? 3 : ticket.statut === "IN_PROGRESS" ? 2 : ticket.assignedTo ? 1 : 0;
-  const steps = ["Créé", "Assigné", "En cours", "Clôturé"];
+
+  // Steps: Créé (0) -> Assigné (1) -> En cours (2) -> À clôturer (3) -> Clôturé (4)
+  const stepIndex =
+    ticket.statut === "CLOSED" ? 4 :
+    ticket.statut === "A_CLOTURER" ? 3 :
+    ticket.statut === "IN_PROGRESS" ? 2 :
+    ticket.assignedTo ? 1 : 0;
+
+  const steps = ["Créé", "Assigné", "En cours", "À clôturer", "Clôturé"];
+
+  const canClose = ticket.statut === "A_CLOTURER" && !!user; // côté API on revalidera: seul le créateur
 
   const handleAddComment = async () => {
     const token = localStorage.getItem("token");
@@ -746,6 +732,36 @@ function TicketDrawer({
     }
   };
 
+  const handleCloseTicket = async () => {
+    if (!canClose) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    setClosing(true);
+    try {
+      // Côté API, on attend un PATCH qui passe le statut à CLOSED.
+      const res = await fetch(`/api/employee/tickets/${ticket.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ statut: "CLOSED" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data?.error || "Impossible de clôturer ce ticket");
+        return;
+      }
+
+      const normalized = normalizeTicket(data);
+      onStatusUpdated(normalized.id, normalized.statut);
+      alert("Ticket clôturé avec succès !");
+    } catch (e) {
+      console.error(e);
+      alert("Erreur lors de la clôture du ticket");
+    } finally {
+      setClosing(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[60]">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
@@ -755,12 +771,25 @@ function TicketDrawer({
             <div className="h-8 w-1 bg-gradient-to-b from-blue-500 to-blue-600 rounded-full"></div>
             <h3 className="text-lg font-semibold text-slate-800">Ticket #{ticket.id}</h3>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors"
-          >
-            ✕ Fermer
-          </button>
+
+          <div className="flex items-center gap-2">
+            {canClose && (
+              <button
+                onClick={handleCloseTicket}
+                disabled={closing}
+                className="rounded-lg bg-emerald-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                title="Clôturer ce ticket (réservé au créateur)"
+              >
+                {closing ? "Clôture…" : "Clôturer"}
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors"
+            >
+              ✕ Fermer
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center gap-3 text-xs text-slate-500 mb-4 pb-4 border-b border-slate-100">
@@ -771,11 +800,7 @@ function TicketDrawer({
             {new Date(ticket.dateCreation).toLocaleString()}
           </span>
           <span>•</span>
-          <span
-            className={`px-2 py-0.5 rounded-md text-xs font-medium ${
-              ticket.type === "ASSISTANCE" ? "bg-blue-50 text-blue-700" : "bg-purple-50 text-purple-700"
-            }`}
-          >
+          <span className={`px-2 py-0.5 rounded-md text-xs font-medium ${ticket.type === "ASSISTANCE" ? "bg-blue-50 text-blue-700" : "bg-purple-50 text-purple-700"}`}>
             {ticket.type}
           </span>
         </div>
@@ -784,48 +809,45 @@ function TicketDrawer({
           <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">{ticket.description}</p>
         </div>
 
-        {/* Timeline de progression */}
+        {/* Timeline de progression incluant "À clôturer" */}
         <div className="mb-6 bg-white border border-slate-200 rounded-lg p-4">
           <h4 className="text-sm font-semibold text-slate-800 mb-3">Progression</h4>
-          <div className="flex items-center justify-between">
-            {steps.map((lbl, i) => (
-              <div key={lbl} className="flex flex-col items-center gap-1.5 flex-1">
-                <div
-                  className={`h-2.5 w-2.5 rounded-full transition-all ${
-                    i < (ticket.statut === "CLOSED" ? 3 : ticket.statut === "IN_PROGRESS" ? 2 : ticket.assignedTo ? 1 : 0)
-                      ? "bg-blue-500 scale-110"
-                      : i === (ticket.statut === "CLOSED" ? 3 : ticket.statut === "IN_PROGRESS" ? 2 : ticket.assignedTo ? 1 : 0)
-                      ? "bg-blue-400 ring-4 ring-blue-100"
-                      : "bg-slate-200"
-                  }`}
-                />
-                <span className={`text-[10px] font-medium ${
-                  i <= (ticket.statut === "CLOSED" ? 3 : ticket.statut === "IN_PROGRESS" ? 2 : ticket.assignedTo ? 1 : 0)
-                    ? "text-slate-700"
-                    : "text-slate-400"
-                }`}>
-                  {lbl}
-                </span>
-                {i !== steps.length - 1 && (
-                  <div
-                    className={`absolute h-0.5 w-full mt-1 ${
-                      i < (ticket.statut === "CLOSED" ? 3 : ticket.statut === "IN_PROGRESS" ? 2 : ticket.assignedTo ? 1 : 0)
-                        ? "bg-blue-400"
-                        : "bg-slate-200"
-                    }`}
-                    style={{ left: `${(i + 0.5) * 25}%`, width: "25%", top: "9px" }}
-                  />
-                )}
-              </div>
-            ))}
+
+          <div className="relative flex items-center">
+            {/* Ligne */}
+            <div className="absolute left-4 right-4 h-1 bg-slate-200 rounded-full" />
+            {/* Segments complétés */}
+            <div
+              className="absolute left-4 h-1 bg-blue-500 rounded-full transition-all"
+              style={{ width: `calc(${(stepIndex / (steps.length - 1)) * 100}% - 1rem)` }}
+            />
+            {/* Points */}
+            <div className="w-full flex justify-between">
+              {steps.map((lbl, i) => {
+                const active = i <= stepIndex;
+                const current = i === stepIndex;
+                return (
+                  <div key={lbl} className="flex flex-col items-center gap-1" style={{ minWidth: 0 }}>
+                    <div
+                      className={`h-3.5 w-3.5 rounded-full border ${
+                        active ? "bg-blue-500 border-blue-600" : "bg-white border-slate-300"
+                      } ${current ? "ring-4 ring-blue-100" : ""}`}
+                    />
+                    <span className={`text-[10px] text-center truncate ${active ? "text-slate-700" : "text-slate-400"}`} title={lbl}>
+                      {lbl}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
+
           <div className="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-600 flex items-center gap-1.5">
             <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
             <span>
-              Technicien assigné :{" "}
-              {ticket.assignedTo ? `${ticket.assignedTo.prenom} ${ticket.assignedTo.nom}` : "En attente d'attribution"}
+              Technicien assigné : {ticket.assignedTo ? `${ticket.assignedTo.prenom} ${ticket.assignedTo.nom}` : "En attente d'attribution"}
             </span>
           </div>
         </div>
