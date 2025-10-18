@@ -33,27 +33,23 @@ type CommentItem = {
 type Application = { id: number; nom: string };
 type Materiel = { id: number; nom: string };
 
-/** Normalise tous les statuts possibles vers OPEN | IN_PROGRESS | A_CLOTURER | CLOSED */
 function normalizeStatus(s: unknown): TicketStatut {
   if (typeof s !== "string") return "OPEN";
   const k = s.trim().toLowerCase();
 
-  // Nouveaux (Prisma)
   if (k === "open") return "OPEN";
   if (k === "in_progress" || k === "in-progress") return "IN_PROGRESS";
   if (k === "a_cloturer" || k === "a-cloturer" || k === "à_clôturer" || k === "à-cloturer") return "A_CLOTURER";
   if (k === "closed" || k === "close") return "CLOSED";
 
-  // Anciens (FR)
   if (k === "en_attente" || k === "en-attente" || k === "attente" || k === "nouveau") return "OPEN";
   if (k === "en_cours" || k === "en-cours" || k === "traitement") return "IN_PROGRESS";
-  if (k === "resolu" || k === "résolu") return "A_CLOTURER"; // Souvent “résolu” => prêt à clôturer côté employé
+  if (k === "resolu" || k === "résolu") return "A_CLOTURER";
   if (k === "cloture" || k === "clôturé" || k === "cloturé") return "CLOSED";
 
   return "OPEN";
 }
 
-/** Normalise un ticket reçu de l'API (clé `statut` ou `status`) */
 function normalizeTicket(raw: any): Ticket {
   return {
     id: Number(raw.id),
@@ -73,29 +69,39 @@ function normalizeTicket(raw: any): Ticket {
 
 export default function EmployeeDashboard() {
   const router = useRouter();
+
+  // —— Session / onglet ——
   const [user, setUser] = useState<{ id: number; nom: string; prenom: string; role: string } | null>(null);
+  const [activeTab, setActiveTab] = useState<"form" | "tickets">("form");
+
+  // —— Formulaire ——
   const [ticketForm, setTicketForm] = useState<TicketForm>({
     description: "",
     typeTicket: "ASSISTANCE",
     applicationId: "",
     materielId: "",
   });
+  const [files, setFiles] = useState<File[]>([]);
 
+  // —— Données ——
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(false);
-
   const [applications, setApplications] = useState<Application[]>([]);
   const [materiels, setMateriels] = useState<Materiel[]>([]);
   const [loadingCats, setLoadingCats] = useState(false);
 
+  // —— Filtres / pagination ——
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | TicketStatut>("ALL");
   const [page, setPage] = useState(1);
-  const pageSize = 8;
+  const [pageSize, setPageSize] = useState<5 | 10 | 20 | 50>(10); // ← sélecteur par page
+
+  // —— Sélection ——
   const [selected, setSelected] = useState<Ticket | null>(null);
 
-  const [files, setFiles] = useState<File[]>([]);
-
+  // ————————————————————————————————————————
+  // Auth
+  // ————————————————————————————————————————
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -116,6 +122,9 @@ export default function EmployeeDashboard() {
     }
   }, [router]);
 
+  // ————————————————————————————————————————
+  // Fetch
+  // ————————————————————————————————————————
   const fetchMyTickets = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -141,7 +150,6 @@ export default function EmployeeDashboard() {
     }
   }, []);
 
-  // charger applications & matériels
   const fetchCategories = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -169,6 +177,9 @@ export default function EmployeeDashboard() {
     fetchCategories();
   }, [user, fetchMyTickets, fetchCategories]);
 
+  // ————————————————————————————————————————
+  // Form handlers
+  // ————————————————————————————————————————
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     if (name === "applicationId" || name === "materielId") {
@@ -231,6 +242,7 @@ export default function EmployeeDashboard() {
       if (fi) fi.value = "";
 
       fetchMyTickets();
+      setActiveTab("tickets");
       setQuery("");
       setStatusFilter("ALL");
       setPage(1);
@@ -240,12 +252,17 @@ export default function EmployeeDashboard() {
     }
   };
 
+  // ————————————————————————————————————————
+  // Logout
+  // ————————————————————————————————————————
   const handleLogout = () => {
     localStorage.removeItem("token");
     router.push("/login");
   };
 
-  // Filtrage & pagination
+  // ————————————————————————————————————————
+  // Filtres + pagination
+  // ————————————————————————————————————————
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return tickets.filter((t) => {
@@ -260,329 +277,360 @@ export default function EmployeeDashboard() {
   }, [tickets, query, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+
+  // Reset page si filtres changent
   useEffect(() => {
     setPage(1);
-  }, [query, statusFilter]);
+  }, [query, statusFilter, pageSize]);
 
   const paginated = useMemo(() => {
     const start = (page - 1) * pageSize;
     return filtered.slice(start, start + pageSize);
-  }, [filtered, page]);
+  }, [filtered, page, pageSize]);
 
   const displayName = user ? `${user.prenom} ${user.nom}` : "…";
 
-  // Mise à jour locale après changement de statut (utilisée par le drawer)
   const handleLocalStatusUpdated = (id: number, newStatut: TicketStatut) => {
     setTickets((prev) => prev.map((t) => (t.id === id ? { ...t, statut: newStatut } : t)));
     setSelected((prev) => (prev && prev.id === id ? { ...prev, statut: newStatut } : prev));
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      {/* Header */}
-      <header className="sticky top-0 z-50 backdrop-blur-md bg-white/80 border-b border-slate-200/60 shadow-sm">
-        <div className="px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <img src="/cds.png" alt="CDS Logo" className="h-10 w-auto" />
-            <div className="h-8 w-px bg-slate-200"></div>
-            <div>
-              <h1 className="font-semibold text-lg text-slate-800">Bienvenue, {displayName}</h1>
-              <p className="text-xs text-slate-500">Portail de support technique</p>
+    <div className="min-h-screen flex flex-col bg-white">
+      {/* Header compact */}
+      <header className="sticky top-0 z-50 bg-white/85 backdrop-blur border-b border-slate-200">
+        <div className="px-4 md:px-6 py-3 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <img src="/cds.png" alt="CDS Logo" className="h-8 w-auto" />
+            <div className="h-6 w-px bg-slate-200" />
+            <div className="leading-tight">
+              <h1 className="font-semibold text-slate-800 text-sm md:text-base">Bienvenue, {displayName}</h1>
+              <p className="text-[11px] text-slate-500">Portail de support technique</p>
             </div>
           </div>
           <button
             onClick={handleLogout}
-            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 active:scale-[.98] transition-all shadow-sm"
+            className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs md:text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
           >
             Déconnexion
           </button>
         </div>
-      </header>
 
-      {/* Contenu principal */}
-      <main className="flex flex-col items-center justify-start px-4 py-10 gap-8">
-        {/* Formulaire nouvelle demande */}
-        <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-          <div className="flex items-center gap-2 mb-6">
-            <div className="h-8 w-1 bg-gradient-to-b from-orange-500 to-orange-600 rounded-full"></div>
-            <h2 className="text-xl font-bold text-slate-800">Nouvelle demande</h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div
-              onClick={() =>
-                setTicketForm((f) => ({
-                  ...f,
-                  typeTicket: "ASSISTANCE",
-                  materielId: "",
-                }))
-              }
-              className={`cursor-pointer border-2 rounded-lg p-4 transition-all ${
-                ticketForm.typeTicket === "ASSISTANCE"
-                  ? "border-blue-500 bg-blue-50/50 shadow-md"
-                  : "border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300"
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <div className={`mt-0.5 p-2 rounded-lg ${ticketForm.typeTicket === "ASSISTANCE" ? "bg-blue-100" : "bg-slate-100"}`}>
-                  <svg className={`w-5 h-5 ${ticketForm.typeTicket === "ASSISTANCE" ? "text-blue-600" : "text-slate-600"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-base font-semibold text-slate-800 mb-1">Assistance</h3>
-                  <p className="text-sm text-slate-600 leading-relaxed">Besoin logiciel ou bureautique (Word, Lotus, Delta, etc.)</p>
-                </div>
-              </div>
-            </div>
-
-            <div
-              onClick={() =>
-                setTicketForm((f) => ({
-                  ...f,
-                  typeTicket: "INTERVENTION",
-                  applicationId: "",
-                }))
-              }
-              className={`cursor-pointer border-2 rounded-lg p-4 transition-all ${
-                ticketForm.typeTicket === "INTERVENTION"
-                  ? "border-purple-500 bg-purple-50/50 shadow-md"
-                  : "border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300"
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <div className={`mt-0.5 p-2 rounded-lg ${ticketForm.typeTicket === "INTERVENTION" ? "bg-purple-100" : "bg-slate-100"}`}>
-                  <svg className={`w-5 h-5 ${ticketForm.typeTicket === "INTERVENTION" ? "text-purple-600" : "text-slate-600"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-base font-semibold text-slate-800 mb-1">Intervention</h3>
-                  <p className="text-sm text-slate-600 leading-relaxed">Panne matérielle nécessitant un déplacement</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Select conditionnel Application / Matériel */}
-          <div className="grid gap-2 mb-4">
-            {ticketForm.typeTicket === "ASSISTANCE" && (
-              <>
-                <label className="text-sm font-medium text-slate-700">Application (optionnel)</label>
-                <select
-                  name="applicationId"
-                  value={ticketForm.applicationId ?? ""}
-                  onChange={handleChange}
-                  className="border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none rounded-lg px-3 py-2.5 text-sm bg-white"
-                  disabled={loadingCats}
-                >
-                  <option value="">— Sélectionner une application —</option>
-                  {applications.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.nom}
-                    </option>
-                  ))}
-                </select>
-              </>
-            )}
-            {ticketForm.typeTicket === "INTERVENTION" && (
-              <>
-                <label className="text-sm font-medium text-slate-700">Matériel (optionnel)</label>
-                <select
-                  name="materielId"
-                  value={ticketForm.materielId ?? ""}
-                  onChange={handleChange}
-                  className="border border-slate-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none rounded-lg px-3 py-2.5 text-sm bg-white"
-                  disabled={loadingCats}
-                >
-                  <option value="">— Sélectionner un matériel —</option>
-                  {materiels.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.nom}
-                    </option>
-                  ))}
-                </select>
-              </>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-5">
-            <div className="grid gap-2">
-              <label htmlFor="description" className="text-sm font-medium text-slate-700">
-                Décrivez votre besoin
-              </label>
-              <textarea
-                id="description"
-                name="description"
-                placeholder="Ex. : Mon imprimante ne répond plus malgré le redémarrage."
-                value={ticketForm.description}
-                onChange={handleChange}
-                className="border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none rounded-lg px-3 py-2.5 min-h-[110px] text-slate-800 placeholder:text-slate-400"
-                required
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <label htmlFor="fileInput" className="text-sm font-medium text-slate-700">Joindre des fichiers</label>
-              <input
-                id="fileInput"
-                name="files"
-                type="file"
-                multiple
-                onChange={handleFiles}
-                className="border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none rounded-lg px-3 py-2.5 text-sm bg-white"
-                accept=".pdf,.png,.jpg,.jpeg,.txt,.log,.doc,.docx,.xlsx,.csv"
-              />
-              {files.length > 0 && (
-                <ul className="mt-1 text-xs text-slate-600 space-y-1 bg-slate-50 rounded-md p-2">
-                  {files.map((f, i) => (
-                    <li key={i} className="flex items-center gap-2">
-                      <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                      </svg>
-                      {f.name} — {(f.size / 1024 / 1024).toFixed(2)} Mo
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <p className="text-xs text-slate-500">Formats : PDF, images, Office, TXT/LOG • Max 10 Mo par fichier, 5 fichiers</p>
-            </div>
-
+        {/* Onglets compacts */}
+        <div className="px-4 md:px-6 border-t border-slate-200">
+          <div className="flex gap-1">
             <button
-              type="button"
-              onClick={handleSubmit}
-              className="mt-2 inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 px-5 py-3 font-semibold text-white shadow-md transition-all hover:shadow-lg hover:from-orange-600 hover:to-orange-700 active:scale-[.98]"
+              onClick={() => setActiveTab("form")}
+              className={`px-3 md:px-4 py-2 text-sm border-b-2 ${
+                activeTab === "form"
+                  ? "border-orange-500 text-orange-700"
+                  : "border-transparent text-slate-600 hover:text-slate-800"
+              }`}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-              Envoyer la demande
+              Faire une demande
+            </button>
+            <button
+              onClick={() => setActiveTab("tickets")}
+              className={`px-3 md:px-4 py-2 text-sm border-b-2 ${
+                activeTab === "tickets"
+                  ? "border-blue-500 text-blue-700"
+                  : "border-transparent text-slate-600 hover:text-slate-800"
+              }`}
+            >
+              Mes tickets
             </button>
           </div>
         </div>
+      </header>
 
-        {/* Suivi des demandes */}
-        <div className="w-full max-w-3xl">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-1 bg-gradient-to-b from-blue-500 to-blue-600 rounded-full"></div>
-              <h2 className="text-lg font-semibold text-slate-800">Suivi de mes demandes</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="search"
-                placeholder="Rechercher..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="h-10 rounded-lg border border-slate-300 px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
-              />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as "ALL" | TicketStatut)}
-                className="h-10 rounded-lg border border-slate-300 px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
-              >
-                <option value="ALL">Tous</option>
-                <option value="OPEN">Ouverts</option>
-                <option value="IN_PROGRESS">En cours</option>
-                <option value="A_CLOTURER">À clôturer</option>
-                <option value="CLOSED">Clôturés</option>
-              </select>
-              <button
-                onClick={fetchMyTickets}
-                className="h-10 text-sm rounded-lg border border-slate-300 px-3 hover:bg-slate-50 bg-white transition-colors"
-              >
-                ⟳
-              </button>
-            </div>
-          </div>
+      {/* Main plus dense et plus large */}
+      <main className="px-4 md:px-6 py-4">
+        <div className="w-full max-w-6xl mx-auto">
+          {/* —— Form —— */}
+          {activeTab === "form" && (
+            <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-4 md:p-5">
+              <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-3">Nouvelle demande</h2>
 
-          {!user && (
-            <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-              Chargement de votre session…
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setTicketForm((f) => ({
+                      ...f,
+                      typeTicket: "ASSISTANCE",
+                      materielId: "",
+                    }))
+                  }
+                  className={`text-left border rounded-md p-3 transition ${
+                    ticketForm.typeTicket === "ASSISTANCE"
+                      ? "border-blue-500 bg-blue-50/50"
+                      : "border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  <div className="font-medium text-slate-800">Assistance</div>
+                  <div className="text-xs text-slate-600">Besoin logiciel / bureautique</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setTicketForm((f) => ({
+                      ...f,
+                      typeTicket: "INTERVENTION",
+                      applicationId: "",
+                    }))
+                  }
+                  className={`text-left border rounded-md p-3 transition ${
+                    ticketForm.typeTicket === "INTERVENTION"
+                      ? "border-purple-500 bg-purple-50/50"
+                      : "border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  <div className="font-medium text-slate-800">Intervention</div>
+                  <div className="text-xs text-slate-600">Panne matérielle avec déplacement</div>
+                </button>
+              </div>
+
+              <div className="grid gap-2 mb-3">
+                {ticketForm.typeTicket === "ASSISTANCE" && (
+                  <>
+                    <label className="text-xs font-medium text-slate-700">Application (optionnel)</label>
+                    <select
+                      name="applicationId"
+                      value={ticketForm.applicationId ?? ""}
+                      onChange={handleChange}
+                      className="border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none rounded-md px-3 py-2 text-sm bg-white"
+                      disabled={loadingCats}
+                    >
+                      <option value="">— Sélectionner une application —</option>
+                      {applications.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.nom}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                )}
+                {ticketForm.typeTicket === "INTERVENTION" && (
+                  <>
+                    <label className="text-xs font-medium text-slate-700">Matériel (optionnel)</label>
+                    <select
+                      name="materielId"
+                      value={ticketForm.materielId ?? ""}
+                      onChange={handleChange}
+                      className="border border-slate-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none rounded-md px-3 py-2 text-sm bg-white"
+                      disabled={loadingCats}
+                    >
+                      <option value="">— Sélectionner un matériel —</option>
+                      {materiels.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.nom}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                )}
+              </div>
+
+              <div className="grid gap-2">
+                <label htmlFor="description" className="text-xs font-medium text-slate-700">
+                  Décrivez votre besoin
+                </label>
+                <textarea
+                  id="description"
+                  name="description"
+                  placeholder="Ex. : Mon imprimante ne répond plus malgré le redémarrage."
+                  value={ticketForm.description}
+                  onChange={handleChange}
+                  className="border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none rounded-md px-3 py-2 min-h-[96px] text-sm text-slate-800 placeholder:text-slate-400"
+                  required
+                />
+              </div>
+
+              <div className="grid gap-2 mt-3">
+                <label htmlFor="fileInput" className="text-xs font-medium text-slate-700">Joindre des fichiers</label>
+                <input
+                  id="fileInput"
+                  name="files"
+                  type="file"
+                  multiple
+                  onChange={handleFiles}
+                  className="border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none rounded-md px-3 py-2 text-sm bg-white"
+                  accept=".pdf,.png,.jpg,.jpeg,.txt,.log,.doc,.docx,.xlsx,.csv"
+                />
+                {files.length > 0 && (
+                  <ul className="mt-1 text-xs text-slate-600 space-y-1 bg-slate-50 rounded-md p-2">
+                    {files.map((f, i) => (
+                      <li key={i} className="flex items-center gap-2">
+                        <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                        </svg>
+                        {f.name} — {(f.size / 1024 / 1024).toFixed(2)} Mo
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="text-[11px] text-slate-500">Formats : PDF, images, Office, TXT/LOG • Max 10 Mo par fichier, 5 fichiers</p>
+              </div>
+
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:from-orange-600 hover:to-orange-700"
+                >
+                  Envoyer la demande
+                </button>
+              </div>
             </div>
           )}
 
-          {user && loading && (
-            <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-              Chargement…
-            </div>
-          )}
+          {/* —— Tickets —— */}
+          {activeTab === "tickets" && (
+            <div className="flex flex-col gap-3">
+              {/* Barre d’outils compacte + sticky */}
+              <div className="sticky top-[81px] z-40 bg-white/95 backdrop-blur border border-slate-200 rounded-md p-2">
+                <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm md:text-base font-semibold text-slate-800">Suivi de mes demandes</h2>
+                    <span className="hidden md:inline text-xs text-slate-500">({tickets.length})</span>
+                  </div>
+                  <div className="flex-1" />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="search"
+                      placeholder="Rechercher..."
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      className="h-9 w-[160px] md:w-[220px] rounded-md border border-slate-300 px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
+                    />
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value as "ALL" | TicketStatut)}
+                      className="h-9 rounded-md border border-slate-300 px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    >
+                      <option value="ALL">Tous</option>
+                      <option value="OPEN">Ouverts</option>
+                      <option value="IN_PROGRESS">En cours</option>
+                      <option value="A_CLOTURER">À clôturer</option>
+                      <option value="CLOSED">Clôturés</option>
+                    </select>
 
-          {user && !loading && paginated.length === 0 && (
-            <div className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-8 text-slate-500 text-sm text-center">
-              <svg className="w-12 h-12 mx-auto mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-              </svg>
-              Aucune demande pour le moment
-            </div>
-          )}
-
-          {user && !loading && paginated.length > 0 && (
-            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-              <ul className="max-h-[520px] overflow-y-auto divide-y divide-slate-100">
-                {paginated.map((t) => (
-                  <li
-                    key={t.id}
-                    onClick={() => setSelected(t)}
-                    className="cursor-pointer px-5 py-4 hover:bg-slate-50 transition-colors"
-                  >
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
-                          <span className="font-mono">#{t.id}</span>
-                          <span>•</span>
-                          <span>{new Date(t.dateCreation).toLocaleString()}</span>
-                        </div>
-                        <p className="text-sm font-medium text-slate-800 truncate mb-2">
-                          {t.description}
-                        </p>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span
-                            className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                              t.type === "ASSISTANCE"
-                                ? "bg-blue-50 text-blue-700 border border-blue-200"
-                                : "bg-purple-50 text-purple-700 border border-purple-200"
-                            }`}
-                          >
-                            {t.type === "ASSISTANCE" ? "Assistance" : "Intervention"}
-                          </span>
-                          <span className="text-xs px-2.5 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200">
-                            {t.assignedTo ? `${t.assignedTo.prenom} ${t.assignedTo.nom}` : "Non assigné"}
-                          </span>
-                        </div>
-                      </div>
-                      <StatusChip statut={t.statut} />
+                    {/* — Sélecteur par page — */}
+                    <div className="flex items-center gap-1">
+                      <span className="text-[11px] text-slate-500">Afficher</span>
+                      <select
+                        value={pageSize}
+                        onChange={(e) => setPageSize(Number(e.target.value) as 5 | 10 | 20 | 50)}
+                        className="h-9 rounded-md border border-slate-300 px-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      >
+                        <option value={5}>5</option>
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                        <option value={50}>50</option>
+                      </select>
+                      <span className="text-[11px] text-slate-500">par page</span>
                     </div>
-                  </li>
-                ))}
-              </ul>
 
-              <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 bg-slate-50 text-sm">
-                <span className="text-slate-600">
-                  Page {page} / {totalPages} • {filtered.length} demande(s)
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    disabled={page === 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-                  >
-                    ← Précédent
-                  </button>
-                  <button
-                    disabled={page === totalPages}
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-                  >
-                    Suivant →
-                  </button>
+                    <button
+                      onClick={fetchMyTickets}
+                      className="h-9 text-sm rounded-md border border-slate-300 px-3 hover:bg-slate-50 bg-white transition-colors"
+                      title="Actualiser"
+                    >
+                      ⟳
+                    </button>
+                  </div>
                 </div>
               </div>
+
+              {!user && (
+                <div className="rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-600">
+                  Chargement de votre session…
+                </div>
+              )}
+
+              {user && loading && (
+                <div className="rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-600">
+                  Chargement…
+                </div>
+              )}
+
+              {user && !loading && paginated.length === 0 && (
+                <div className="rounded-md border-2 border-dashed border-slate-200 bg-slate-50 p-6 text-slate-500 text-sm text-center">
+                  Aucune demande pour le moment
+                </div>
+              )}
+
+              {user && !loading && paginated.length > 0 && (
+                <div className="rounded-md border border-slate-200 bg-white shadow-sm overflow-hidden">
+                  {/* Liste plus compacte */}
+                  <ul className="max-h-[520px] overflow-y-auto divide-y divide-slate-100">
+                    {paginated.map((t) => (
+                      <li
+                        key={t.id}
+                        onClick={() => setSelected(t)}
+                        className="cursor-pointer px-4 py-3 hover:bg-slate-50 transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 text-[11px] text-slate-500 mb-0.5">
+                              <span className="font-mono">#{t.id}</span>
+                              <span>•</span>
+                              <span>{new Date(t.dateCreation).toLocaleString()}</span>
+                            </div>
+                            <p className="text-sm font-medium text-slate-800 truncate">
+                              {t.description || "(Sans titre)"}
+                            </p>
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              <span
+                                className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                                  t.type === "ASSISTANCE"
+                                    ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                    : "bg-purple-50 text-purple-700 border border-purple-200"
+                                }`}
+                              >
+                                {t.type === "ASSISTANCE" ? "Assistance" : "Intervention"}
+                              </span>
+                              <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-50 text-slate-700 border border-slate-200">
+                                {t.assignedTo ? `${t.assignedTo.prenom} ${t.assignedTo.nom}` : "Non assigné"}
+                              </span>
+                            </div>
+                          </div>
+                          <StatusChip statut={t.statut} />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {/* Pagination + résumé */}
+                  <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-200 bg-slate-50 text-sm">
+                    <span className="text-slate-600">
+                      Page {page} / {totalPages} • {filtered.length} demande{filtered.length > 1 ? "s" : ""} • {pageSize}/page
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        disabled={page === 1}
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        className="px-3 py-1.5 rounded-md border border-slate-300 bg-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                      >
+                        ← Précédent
+                      </button>
+                      <button
+                        disabled={page === totalPages}
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        className="px-3 py-1.5 rounded-md border border-slate-300 bg-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                      >
+                        Suivant →
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
 
+        {/* Drawer ticket */}
         <TicketDrawer
           ticket={selected}
           onClose={() => setSelected(null)}
@@ -603,7 +651,7 @@ function StatusChip({ statut }: { statut: TicketStatut }) {
   } as const;
   const s = map[statut];
   return (
-    <span className={`shrink-0 rounded-full border-2 px-3 py-1.5 text-xs font-semibold ${s.cls} flex items-center gap-1.5`}>
+    <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${s.cls} flex items-center gap-1.5`}>
       <span>{s.icon}</span>
       {s.label}
     </span>
@@ -675,7 +723,6 @@ function TicketDrawer({
 
   if (!ticket) return null;
 
-  // Steps: Créé (0) -> Assigné (1) -> En cours (2) -> À clôturer (3) -> Clôturé (4)
   const stepIndex =
     ticket.statut === "CLOSED" ? 4 :
     ticket.statut === "A_CLOTURER" ? 3 :
@@ -684,7 +731,7 @@ function TicketDrawer({
 
   const steps = ["Créé", "Assigné", "En cours", "À clôturer", "Clôturé"];
 
-  const canClose = ticket.statut === "A_CLOTURER" && !!user; // côté API on revalidera: seul le créateur
+  const canClose = ticket.statut === "A_CLOTURER" && !!user;
 
   const handleAddComment = async () => {
     const token = localStorage.getItem("token");
@@ -703,7 +750,7 @@ function TicketDrawer({
       id: tempId,
       contenu,
       createdAt: new Date().toISOString(),
-      auteur: { id: user.id, prenom: user.prenom || "Vous", nom: user.nom || "" },
+      auteur: { id: user.id, prenom: (user as any).prenom || "Vous", nom: (user as any).nom || "" },
     };
     setComments((prev) => [...prev, optimistic]);
     setCommentInput("");
@@ -739,7 +786,6 @@ function TicketDrawer({
 
     setClosing(true);
     try {
-      // Côté API, on attend un PATCH qui passe le statut à CLOSED.
       const res = await fetch(`/api/employee/tickets/${ticket.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -765,11 +811,11 @@ function TicketDrawer({
   return (
     <div className="fixed inset-0 z-[60]">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
-      <aside className="absolute right-0 top-0 h-full w-full sm:w-[480px] bg-white shadow-2xl border-l border-slate-200 p-6 flex flex-col overflow-y-auto">
-        <div className="flex items-center justify-between mb-4">
+      <aside className="absolute right-0 top-0 h-full w-full sm:w-[480px] bg-white shadow-2xl border-l border-slate-200 p-4 md:p-5 flex flex-col overflow-y-auto">
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <div className="h-8 w-1 bg-gradient-to-b from-blue-500 to-blue-600 rounded-full"></div>
-            <h3 className="text-lg font-semibold text-slate-800">Ticket #{ticket.id}</h3>
+            <div className="h-6 w-1 bg-gradient-to-b from-blue-500 to-blue-600 rounded-full"></div>
+            <h3 className="text-base font-semibold text-slate-800">Ticket #{ticket.id}</h3>
           </div>
 
           <div className="flex items-center gap-2">
@@ -777,7 +823,7 @@ function TicketDrawer({
               <button
                 onClick={handleCloseTicket}
                 disabled={closing}
-                className="rounded-lg bg-emerald-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                className="rounded-md bg-emerald-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50"
                 title="Clôturer ce ticket (réservé au créateur)"
               >
                 {closing ? "Clôture…" : "Clôturer"}
@@ -785,14 +831,14 @@ function TicketDrawer({
             )}
             <button
               onClick={onClose}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors"
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors"
             >
               ✕ Fermer
             </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 text-xs text-slate-500 mb-4 pb-4 border-b border-slate-100">
+        <div className="flex items-center gap-3 text-xs text-slate-500 mb-3 pb-3 border-b border-slate-100">
           <span className="flex items-center gap-1">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -805,25 +851,21 @@ function TicketDrawer({
           </span>
         </div>
 
-        <div className="bg-slate-50 rounded-lg p-4 mb-6">
+        <div className="bg-slate-50 rounded-md p-3 mb-4">
           <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">{ticket.description}</p>
         </div>
 
-        {/* Timeline de progression incluant "À clôturer" */}
-        <div className="mb-6 bg-white border border-slate-200 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-slate-800 mb-3">Progression</h4>
+        <div className="mb-4 bg-white border border-slate-200 rounded-md p-3">
+          <h4 className="text-sm font-semibold text-slate-800 mb-2.5">Progression</h4>
 
           <div className="relative flex items-center">
-            {/* Ligne */}
             <div className="absolute left-4 right-4 h-1 bg-slate-200 rounded-full" />
-            {/* Segments complétés */}
             <div
               className="absolute left-4 h-1 bg-blue-500 rounded-full transition-all"
-              style={{ width: `calc(${(stepIndex / (steps.length - 1)) * 100}% - 1rem)` }}
+              style={{ width: `calc(${(stepIndex / (4)) * 100}% - 1rem)` }}
             />
-            {/* Points */}
             <div className="w-full flex justify-between">
-              {steps.map((lbl, i) => {
+              {["Créé", "Assigné", "En cours", "À clôturer", "Clôturé"].map((lbl, i) => {
                 const active = i <= stepIndex;
                 const current = i === stepIndex;
                 return (
@@ -842,7 +884,7 @@ function TicketDrawer({
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-600 flex items-center gap-1.5">
+          <div className="mt-3 pt-2 border-t border-slate-100 text-xs text-slate-600 flex items-center gap-1.5">
             <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
@@ -852,24 +894,23 @@ function TicketDrawer({
           </div>
         </div>
 
-        {/* Pièces jointes */}
-        <div className="mb-6">
-          <div className="flex items-center gap-2 mb-3">
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-2">
             <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
             </svg>
             <h4 className="text-sm font-semibold text-slate-800">Pièces jointes</h4>
           </div>
-          {loading && <div className="text-xs text-slate-500 bg-slate-50 rounded-lg p-3">Chargement…</div>}
+          {loading && <div className="text-xs text-slate-500 bg-slate-50 rounded-md p-2">Chargement…</div>}
           {!loading && pj.length === 0 && (
-            <div className="text-xs text-slate-500 bg-slate-50 rounded-lg p-3 text-center">Aucune pièce jointe</div>
+            <div className="text-xs text-slate-500 bg-slate-50 rounded-md p-2 text-center">Aucune pièce jointe</div>
           )}
           {!loading && pj.length > 0 && (
             <ul className="space-y-2">
               {pj.map((f) => (
                 <li key={f.id}>
                   <a
-                    className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg p-2 transition-colors border border-slate-200"
+                    className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md p-2 transition-colors border border-slate-200"
                     href={f.url}
                     target="_blank"
                     rel="noreferrer"
@@ -885,9 +926,8 @@ function TicketDrawer({
           )}
         </div>
 
-        {/* Commentaires */}
         <div className="flex-1 flex flex-col">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -912,23 +952,24 @@ function TicketDrawer({
                   setLoadingComments(false);
                 }
               }}
-              className="text-xs rounded-lg border border-slate-300 px-2.5 py-1 hover:bg-slate-50 transition-colors"
+              className="text-xs rounded-md border border-slate-300 px-2.5 py-1 hover:bg-slate-50 transition-colors"
+              title="Actualiser les commentaires"
             >
               ⟳
             </button>
           </div>
 
-          {loadingComments && <div className="text-xs text-slate-500 bg-slate-50 rounded-lg p-3">Chargement…</div>}
+          {loadingComments && <div className="text-xs text-slate-500 bg-slate-50 rounded-md p-2">Chargement…</div>}
 
           {comments.length === 0 && !loadingComments ? (
-            <div className="text-xs text-slate-500 bg-slate-50 rounded-lg p-4 text-center mb-4">
+            <div className="text-xs text-slate-500 bg-slate-50 rounded-md p-3 text-center mb-3">
               Aucun commentaire pour le moment
             </div>
           ) : (
-            <ul className="space-y-3 mb-4 flex-1 overflow-y-auto">
+            <ul className="space-y-2 mb-3 flex-1 overflow-y-auto">
               {comments.map((c) => (
-                <li key={c.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <div className="flex items-center justify-between text-xs text-slate-500 mb-1.5">
+                <li key={c.id} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
                     <span className="font-medium text-slate-700">
                       {c.auteur.prenom} {c.auteur.nom}
                     </span>
@@ -940,22 +981,21 @@ function TicketDrawer({
             </ul>
           )}
 
-          {/* Formulaire d'ajout de commentaire */}
-          <div className="border-t border-slate-200 pt-4 mt-auto">
-            <label className="text-xs font-medium text-slate-700 mb-2 block">Ajouter un commentaire</label>
+          <div className="border-t border-slate-200 pt-3 mt-auto">
+            <label className="text-[11px] font-medium text-slate-700 mb-1.5 block">Ajouter un commentaire</label>
             <textarea
               value={commentInput}
               onChange={(e) => setCommentInput(e.target.value)}
-              className="w-full min-h-[90px] border border-slate-300 rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 mb-2"
+              className="w-full min-h-[84px] border border-slate-300 rounded-md p-2 text-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 mb-2"
               placeholder="Précisions, compléments, captures envoyées, etc."
               maxLength={4000}
             />
             <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-400">{commentInput.length} / 4000</span>
+              <span className="text-[11px] text-slate-400">{commentInput.length} / 4000</span>
               <button
                 onClick={handleAddComment}
                 disabled={sending || commentInput.trim().length < 2}
-                className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium shadow-sm"
+                className="px-4 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium shadow-sm"
               >
                 {sending ? "Envoi…" : "Publier"}
               </button>
