@@ -7,33 +7,21 @@ import Link from "next/link";
 import NotificationBell from "@/app/components/NotificationBell";
 import { Eye, X, Clock, CheckCircle2, AlertCircle, XCircle, Send, Archive, PlayCircle, CheckCheck } from "lucide-react";
 
-/* ==========================================
-   Types
-   ========================================== */
 type Ticket = {
   id: number;
   description: string;
   type: "ASSISTANCE" | "INTERVENTION";
-  statut:
-    | "OPEN"
-    | "IN_PROGRESS"
-    | "A_CLOTURER"
-    | "REJETE"
-    | "TRANSFERE_MANTICE"
-    | "CLOSED";
+  statut: "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "REJETE" | "TRANSFERE_MANTICE" | "CLOSED";
   dateCreation?: string;
   createdBy: { id: number; prenom: string; nom: string };
   assignedTo?: { id: number; prenom: string; nom: string } | null;
   application?: { id: number; nom: string } | null;
   materiel?: { id: number; nom: string } | null;
-  manticeNumero?: string | null;  // ✅ ajouté
+  manticeNumero?: string | null;
 };
 
 type PieceJointe = { id: number; nomFichier: string; url: string };
 
-/* ==========================================
-   Helpers statuts
-   ========================================== */
 function statusLabel(s: Ticket["statut"]): string {
   switch (s) {
     case "OPEN": return "Ouvert";
@@ -49,18 +37,15 @@ function statusLabel(s: Ticket["statut"]): string {
 function normalizeStatus(s: unknown): Ticket["statut"] {
   if (typeof s !== "string") return "OPEN";
   const k = s.trim().toLowerCase();
-
   if (k === "open") return "OPEN";
   if (k === "in_progress" || k === "in-progress") return "IN_PROGRESS";
-  if (k === "a_cloturer" || k === "a-cloturer" || k === "à_clôturer" || k === "à-cloturer") return "A_CLOTURER";
+  if (k === "a_cloturer" || k === "a-cloturer" || k === "à_clôturer" || k === "à-clôturer") return "A_CLOTURER";
   if (k === "rejete" || k === "rejeté") return "REJETE";
   if (k === "transfere_mantice" || k === "transfère_mantice" || k === "transfere-mantice") return "TRANSFERE_MANTICE";
   if (k === "closed" || k === "close") return "CLOSED";
-
   if (k === "en_attente" || k === "en-attente" || k === "attente" || k === "nouveau") return "OPEN";
   if (k === "en_cours" || k === "en-cours" || k === "traitement") return "IN_PROGRESS";
   if (k === "resolu" || k === "résolu" || k === "cloture" || k === "clôturé") return "CLOSED";
-
   return "OPEN";
 }
 
@@ -81,13 +66,10 @@ function normalizeTicket(raw: any): Ticket {
       : null,
     application: raw.application ? { id: Number(raw.application.id), nom: String(raw.application.nom ?? "") } : null,
     materiel: raw.materiel ? { id: Number(raw.materiel.id), nom: String(raw.materiel.nom ?? "") } : null,
-    manticeNumero: raw.manticeNumero ?? null, // ✅ ajouté
+    manticeNumero: raw.manticeNumero ?? null,
   };
 }
 
-/* ==========================================
-   Composant principal
-   ========================================== */
 export default function TechnicianTicketsDashboard() {
   const router = useRouter();
   const [user, setUser] = useState<{ id: number; prenom: string; nom: string; role: string } | null>(null);
@@ -96,8 +78,12 @@ export default function TechnicianTicketsDashboard() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
-  const [manticeNumeroInput, setManticeNumeroInput] = useState<string>("");   // ✅ input modal
-  const [showManticeInput, setShowManticeInput] = useState<boolean>(false);   // ✅ affichage conditionnel
+  const [manticeNumeroInput, setManticeNumeroInput] = useState<string>("");
+  const [showManticeInput, setShowManticeInput] = useState<boolean>(false);
+
+  const [statusFilter, setStatusFilter] = useState<Ticket["statut"] | "ALL">("ALL");
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -146,7 +132,6 @@ export default function TechnicianTicketsDashboard() {
     if (user) fetchTickets();
   }, [user, fetchTickets]);
 
-  // ✅ centralise la MAJ locale après un update
   const applyUpdatedTicket = (updated: any) => {
     const normalized = normalizeTicket(updated);
     setTickets((prev) => prev.map((t) => (t.id === normalized.id ? normalized : t)));
@@ -166,11 +151,9 @@ export default function TechnicianTicketsDashboard() {
   };
 
   const handleStatusChange = async (ticketId: number, newStatus: Ticket["statut"]) => {
-    // Cas spécifique Mantice : si aucun numéro connu, on affiche l'input et on ne PATCH que quand l’utilisateur valide
     if (newStatus === "TRANSFERE_MANTICE") {
       setShowManticeInput(true);
       if (activeTicket?.manticeNumero) {
-        // S'il y a déjà un numéro, on tente directement
         const { ok, data } = await patchTicket(ticketId, { statut: "TRANSFERE_MANTICE", manticeNumero: activeTicket.manticeNumero });
         if (!ok) {
           alert(data?.error || "Erreur mise à jour du statut");
@@ -179,7 +162,6 @@ export default function TechnicianTicketsDashboard() {
         applyUpdatedTicket(data);
         alert("Ticket transféré à MANTICE !");
       } else {
-        // Laisse l’utilisateur saisir puis cliquer sur “Valider Mantice”
         alert("Veuillez renseigner le numéro Mantice puis valider.");
       }
       return;
@@ -194,7 +176,6 @@ export default function TechnicianTicketsDashboard() {
     alert("Statut mis à jour !");
   };
 
-  // ✅ enregistrer / modifier le numéro Mantice (avec transfert si nécessaire)
   const handleSaveMantice = async () => {
     if (!activeTicket) return;
     const numero = manticeNumeroInput.trim();
@@ -202,7 +183,6 @@ export default function TechnicianTicketsDashboard() {
       alert("Veuillez saisir un numéro Mantice.");
       return;
     }
-    // Si pas encore transféré → on transfère + pose le numéro
     const payload =
       activeTicket.statut === "TRANSFERE_MANTICE"
         ? { manticeNumero: numero }
@@ -210,7 +190,7 @@ export default function TechnicianTicketsDashboard() {
 
     const { ok, data } = await patchTicket(activeTicket.id, payload);
     if (!ok) {
-      alert(data?.error || "Impossible d’enregistrer le numéro Mantice");
+      alert(data?.error || "Impossible d'enregistrer le numéro Mantice");
       return;
     }
     applyUpdatedTicket(data);
@@ -232,10 +212,26 @@ export default function TechnicianTicketsDashboard() {
     CLOSED: tickets.filter((t) => t.statut === "CLOSED").length,
   }), [tickets]);
 
+  const filtered = useMemo(() => {
+    if (statusFilter === "ALL") return tickets;
+    return tickets.filter((t) => t.statut === statusFilter);
+  }, [tickets, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter]);
+
+  const paginated = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+
   const openModal = (t: Ticket) => {
     setActiveTicket(t);
-    setManticeNumeroInput(t.manticeNumero ?? "");           // ✅ init input
-    setShowManticeInput(t.statut === "TRANSFERE_MANTICE");  // ✅ si déjà transféré → montrer l’input
+    setManticeNumeroInput(t.manticeNumero ?? "");
+    setShowManticeInput(t.statut === "TRANSFERE_MANTICE");
     setModalOpen(true);
   };
 
@@ -299,70 +295,117 @@ export default function TechnicianTicketsDashboard() {
       </header>
 
       <main className="mx-auto max-w-7xl w-full px-6 py-6 space-y-6">
-        {/* Statistiques */}
+        {/* Statistiques - Cliquables */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <StatCard
+          <ClickableStatCard
             label="Ouverts"
             count={stats.OPEN}
             icon={<Clock className="h-5 w-5" />}
             color="bg-amber-500"
             bgColor="bg-amber-50"
             textColor="text-amber-700"
+            isActive={statusFilter === "OPEN"}
+            onClick={() => setStatusFilter("OPEN")}
           />
-          <StatCard
+          <ClickableStatCard
             label="En cours"
             count={stats.IN_PROGRESS}
             icon={<PlayCircle className="h-5 w-5" />}
             color="bg-blue-500"
             bgColor="bg-blue-50"
             textColor="text-blue-700"
+            isActive={statusFilter === "IN_PROGRESS"}
+            onClick={() => setStatusFilter("IN_PROGRESS")}
           />
-          <StatCard
+          <ClickableStatCard
             label="À clôturer"
             count={stats.A_CLOTURER}
             icon={<CheckCircle2 className="h-5 w-5" />}
             color="bg-violet-500"
             bgColor="bg-violet-50"
             textColor="text-violet-700"
+            isActive={statusFilter === "A_CLOTURER"}
+            onClick={() => setStatusFilter("A_CLOTURER")}
           />
-          <StatCard
+          <ClickableStatCard
             label="Rejetés"
             count={stats.REJETE}
             icon={<XCircle className="h-5 w-5" />}
             color="bg-rose-500"
             bgColor="bg-rose-50"
             textColor="text-rose-700"
+            isActive={statusFilter === "REJETE"}
+            onClick={() => setStatusFilter("REJETE")}
           />
-          <StatCard
+          <ClickableStatCard
             label="Transférés"
             count={stats.TRANSFERE_MANTICE}
             icon={<Send className="h-5 w-5" />}
             color="bg-indigo-500"
             bgColor="bg-indigo-50"
             textColor="text-indigo-700"
+            isActive={statusFilter === "TRANSFERE_MANTICE"}
+            onClick={() => setStatusFilter("TRANSFERE_MANTICE")}
           />
-          <StatCard
+          <ClickableStatCard
             label="Clôturés"
             count={stats.CLOSED}
             icon={<Archive className="h-5 w-5" />}
             color="bg-emerald-500"
             bgColor="bg-emerald-50"
             textColor="text-emerald-700"
+            isActive={statusFilter === "CLOSED"}
+            onClick={() => setStatusFilter("CLOSED")}
           />
         </div>
 
-        {/* Liste des tickets */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-200">
-            <h2 className="text-base font-semibold text-slate-900">Tous mes tickets</h2>
-            <p className="text-sm text-slate-500 mt-1">
-              {tickets.length} ticket{tickets.length > 1 ? 's' : ''} assigné{tickets.length > 1 ? 's' : ''}
-            </p>
+        {/* Bouton Réinitialiser le filtre */}
+        {statusFilter !== "ALL" && (
+          <div className="flex justify-center">
+            <button
+              onClick={() => setStatusFilter("ALL")}
+              className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              ✕ Afficher tous mes tickets
+            </button>
           </div>
-          
-          <div className="overflow-x-auto">
+        )}
+
+        {/* Liste des tickets */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          {/* Header */}
+          <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Tous mes tickets</h2>
+              <p className="text-sm text-slate-500 mt-1">
+                {statusFilter === "ALL" ? tickets.length : filtered.length} ticket{
+                  (statusFilter === "ALL" ? tickets.length : filtered.length) > 1 ? "s" : ""
+                } {statusFilter !== "ALL" ? `(${statusLabel(statusFilter)})` : ""}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-slate-600">Afficher</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="border border-slate-300 rounded-lg px-2 py-1 bg-white"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+              </select>
+              <span className="text-slate-600">par page</span>
+            </div>
+          </div>
+
+          {/* Tableau */}
+          <div className="flex-1 overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-slate-50 border-b border-slate-200">
+              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
                     ID
@@ -385,14 +428,16 @@ export default function TechnicianTicketsDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {tickets.length === 0 && (
+                {filtered.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-6 py-8 text-center text-sm text-slate-500">
-                      Aucun ticket assigné
+                      {statusFilter === "ALL"
+                        ? "Aucun ticket assigné"
+                        : `Aucun ticket ${statusLabel(statusFilter).toLowerCase()}`}
                     </td>
                   </tr>
                 )}
-                {tickets.map((ticket) => (
+                {paginated.map((ticket) => (
                   <tr key={ticket.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-sm font-mono font-medium text-slate-900">
@@ -411,7 +456,7 @@ export default function TechnicianTicketsDashboard() {
                             {ticket.materiel?.nom && `Mat: ${ticket.materiel.nom}`}
                           </p>
                         )}
-                        {ticket.manticeNumero && ( // ✅ affichage rapide
+                        {ticket.manticeNumero && (
                           <p className="text-xs text-indigo-700 mt-1">MANTICE: {ticket.manticeNumero}</p>
                         )}
                       </div>
@@ -447,6 +492,31 @@ export default function TechnicianTicketsDashboard() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination */}
+          {filtered.length > 0 && (
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+              <span className="text-sm text-slate-600">
+                Page {page} / {totalPages} • {filtered.length} ticket{filtered.length > 1 ? "s" : ""}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  disabled={page === 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors text-sm font-medium"
+                >
+                  ← Précédent
+                </button>
+                <button
+                  disabled={page === totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors text-sm font-medium"
+                >
+                  Suivant →
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </main>
 
@@ -454,7 +524,6 @@ export default function TechnicianTicketsDashboard() {
       {modalOpen && activeTicket && (
         <Modal onClose={closeModal} title={`Ticket #${activeTicket.id}`}>
           <div className="space-y-6">
-            {/* En-tête ticket */}
             <div className="space-y-3">
               <h3 className="text-base font-semibold text-slate-900">
                 {activeTicket.description || "(Sans titre)"}
@@ -489,7 +558,6 @@ export default function TechnicianTicketsDashboard() {
               </div>
             </div>
 
-            {/* Changement de statut */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 Changer le statut
@@ -512,11 +580,10 @@ export default function TechnicianTicketsDashboard() {
               </select>
             </div>
 
-            {/* Section Mantice (affichée si transféré ou si l’utilisateur a choisi ce statut) */}
             {(showManticeInput || activeTicket.statut === "TRANSFERE_MANTICE") && (
               <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 space-y-3">
                 <p className="text-sm font-medium text-indigo-800">
-                  Numéro MANTICE (obligatoire si “Transféré MANTICE”)
+                  Numéro MANTICE (obligatoire si "Transféré MANTICE")
                 </p>
                 <input
                   value={manticeNumeroInput}
@@ -541,7 +608,6 @@ export default function TechnicianTicketsDashboard() {
               </div>
             )}
 
-            {/* Actions rapides */}
             <div>
               <p className="text-sm font-medium text-slate-700 mb-3">Actions rapides</p>
               <div className="grid grid-cols-2 gap-3">
@@ -563,7 +629,7 @@ export default function TechnicianTicketsDashboard() {
                   onClick={() => {
                     setShowManticeInput(true);
                     if (!activeTicket.manticeNumero) {
-                      alert("Saisissez le numéro Mantice puis cliquez sur “Valider Mantice”.");
+                      alert("Saisissez le numéro Mantice puis cliquez sur 'Valider Mantice'.");
                     } else {
                       handleStatusChange(activeTicket.id, "TRANSFERE_MANTICE");
                     }
@@ -583,13 +649,11 @@ export default function TechnicianTicketsDashboard() {
               </div>
             </div>
 
-            {/* Pièces jointes */}
             <div>
               <h4 className="text-sm font-medium text-slate-900 mb-3">Pièces jointes</h4>
               <AttachmentList ticketId={activeTicket.id} />
             </div>
 
-            {/* Lien page complète */}
             <div className="pt-4 border-t border-slate-200">
               <Link
                 href={`/dashboard/technicien/${activeTicket.id}`}
@@ -608,16 +672,15 @@ export default function TechnicianTicketsDashboard() {
   );
 }
 
-/* ==========================================
-   Composants auxiliaires
-   ========================================== */
-function StatCard({
+function ClickableStatCard({
   label,
   count,
   icon,
   color,
   bgColor,
   textColor,
+  isActive,
+  onClick,
 }: {
   label: string;
   count: number;
@@ -625,9 +688,18 @@ function StatCard({
   color: string;
   bgColor: string;
   textColor: string;
+  isActive: boolean;
+  onClick: () => void;
 }) {
   return (
-    <div className={`${bgColor} rounded-xl p-4 border border-slate-200`}>
+    <button
+      onClick={onClick}
+      className={`${bgColor} rounded-xl p-4 border-2 transition-all cursor-pointer text-left ${
+        isActive
+          ? `border-${color.split("-")[1]}-500 shadow-lg scale-105`
+          : "border-slate-200 hover:border-slate-300 hover:shadow-md"
+      }`}
+    >
       <div className="flex items-center justify-between mb-2">
         <div className={`${color} text-white p-2 rounded-lg`}>
           {icon}
@@ -637,7 +709,7 @@ function StatCard({
         <p className={`text-2xl font-bold ${textColor}`}>{count}</p>
         <p className="text-sm text-slate-600 mt-1">{label}</p>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -651,7 +723,7 @@ function StatusBadge({ status }: { status: Ticket["statut"] }) {
     CLOSED: { label: "Clôturé", className: "bg-emerald-100 text-emerald-800" },
   };
 
-  const { label, className } = (config as any)[status];
+  const { label, className } = config[status];
   return (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${className}`}>
       {label}

@@ -7,20 +7,11 @@ import Link from "next/link";
 import NotificationBell from "@/app/components/NotificationBell";
 import { Eye, X, Clock, CheckCircle2, AlertCircle, XCircle, Send, Archive } from "lucide-react";
 
-/* ==========================================
-   Types
-   ========================================== */
 type Ticket = {
   id: number;
   description: string;
   type: "ASSISTANCE" | "INTERVENTION";
-  statut:
-    | "OPEN"
-    | "IN_PROGRESS"
-    | "A_CLOTURER"
-    | "REJETE"
-    | "TRANSFERE_MANTICE"
-    | "CLOSED";
+  statut: "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "REJETE" | "TRANSFERE_MANTICE" | "CLOSED";
   createdBy: { id: number; prenom: string; nom: string };
   assignedTo?: { id: number; prenom: string; nom: string } | null;
   application?: { id: number; nom: string } | null;
@@ -30,71 +21,30 @@ type Ticket = {
 type Technicien = { id: number; prenom: string; nom: string };
 type PieceJointe = { id: number; nomFichier: string; url: string };
 
-/* ==========================================
-   Helpers statut
-   ========================================== */
 function statusLabel(s: Ticket["statut"]): string {
   switch (s) {
-    case "OPEN":
-      return "Ouvert";
-    case "IN_PROGRESS":
-      return "En cours";
-    case "A_CLOTURER":
-      return "À clôturer";
-    case "REJETE":
-      return "Rejeté";
-    case "TRANSFERE_MANTICE":
-      return "Transféré MANTICE";
-    case "CLOSED":
-      return "Clôturé";
-    default:
-      return String(s);
+    case "OPEN": return "Ouvert";
+    case "IN_PROGRESS": return "En cours";
+    case "A_CLOTURER": return "À clôturer";
+    case "REJETE": return "Rejeté";
+    case "TRANSFERE_MANTICE": return "Transféré MANTICE";
+    case "CLOSED": return "Clôturé";
+    default: return String(s);
   }
 }
 
 function normalizeStatus(s: unknown): Ticket["statut"] {
   if (typeof s !== "string") return "OPEN";
   const k = s.trim().toLowerCase();
-
   if (k === "open") return "OPEN";
   if (k === "in_progress" || k === "in-progress") return "IN_PROGRESS";
-  if (
-    k === "a_cloturer" ||
-    k === "a-cloturer" ||
-    k === "à_clôturer" ||
-    k === "à-clôturer"
-  )
-    return "A_CLOTURER";
+  if (k === "a_cloturer" || k === "a-cloturer" || k === "à_clôturer" || k === "à-clôturer") return "A_CLOTURER";
   if (k === "rejete" || k === "rejeté") return "REJETE";
-  if (
-    k === "transfere_mantice" ||
-    k === "transfère_mantice" ||
-    k === "transfere-mantice"
-  )
-    return "TRANSFERE_MANTICE";
+  if (k === "transfere_mantice" || k === "transfère_mantice" || k === "transfere-mantice") return "TRANSFERE_MANTICE";
   if (k === "closed" || k === "close") return "CLOSED";
-
-  if (
-    k === "en_attente" ||
-    k === "en-attente" ||
-    k === "attente" ||
-    k === "nouveau"
-  )
-    return "OPEN";
-  if (k === "en_cours" || k === "en-cours" || k === "traitement")
-    return "IN_PROGRESS";
-  if (k === "a_cloturer" || k === "à_clôturer") return "A_CLOTURER";
-  if (k === "rejete" || k === "rejeté") return "REJETE";
-  if (k === "transfere_mantice" || k === "transféré_mantice")
-    return "TRANSFERE_MANTICE";
-  if (
-    k === "resolu" ||
-    k === "résolu" ||
-    k === "cloture" ||
-    k === "clôturé"
-  )
-    return "CLOSED";
-
+  if (k === "en_attente" || k === "en-attente" || k === "attente" || k === "nouveau") return "OPEN";
+  if (k === "en_cours" || k === "en-cours" || k === "traitement") return "IN_PROGRESS";
+  if (k === "resolu" || k === "résolu" || k === "cloture" || k === "clôturé") return "CLOSED";
   return "OPEN";
 }
 
@@ -125,9 +75,6 @@ function normalizeTicket(raw: any): Ticket {
   };
 }
 
-/* ==========================================
-   Composant principal
-   ========================================== */
 export default function AdminTicketsDashboard() {
   const router = useRouter();
   const [user, setUser] = useState<{ id: number; role: string } | null>(null);
@@ -136,6 +83,10 @@ export default function AdminTicketsDashboard() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
+
+  const [statusFilter, setStatusFilter] = useState<Ticket["statut"] | "ALL">("ALL");
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -174,9 +125,7 @@ export default function AdminTicketsDashboard() {
         ticketsRes.json(),
         techsRes.json(),
       ]);
-      const list = Array.isArray(ticketsData)
-        ? ticketsData.map(normalizeTicket)
-        : [];
+      const list = Array.isArray(ticketsData) ? ticketsData.map(normalizeTicket) : [];
       setTickets(list);
       setTechniciens(Array.isArray(techsData) ? techsData : []);
     } catch (err) {
@@ -218,10 +167,7 @@ export default function AdminTicketsDashboard() {
     }
   };
 
-  const handleStatusChange = async (
-    ticketId: number,
-    newStatus: Ticket["statut"]
-  ) => {
+  const handleStatusChange = async (ticketId: number, newStatus: Ticket["statut"]) => {
     const token = localStorage.getItem("token");
     if (!token) return;
 
@@ -264,6 +210,22 @@ export default function AdminTicketsDashboard() {
     TRANSFERE_MANTICE: tickets.filter((t) => t.statut === "TRANSFERE_MANTICE").length,
     CLOSED: tickets.filter((t) => t.statut === "CLOSED").length,
   }), [tickets]);
+
+  const filtered = useMemo(() => {
+    if (statusFilter === "ALL") return tickets;
+    return tickets.filter((t) => t.statut === statusFilter);
+  }, [tickets, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter]);
+
+  const paginated = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
 
   const openModal = (t: Ticket) => {
     setActiveTicket(t);
@@ -323,70 +285,117 @@ export default function AdminTicketsDashboard() {
       </header>
 
       <main className="mx-auto max-w-7xl w-full px-6 py-6 space-y-6">
-        {/* Statistiques */}
+        {/* Statistiques - Cliquables */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <StatCard
+          <ClickableStatCard
             label="Ouverts"
             count={stats.OPEN}
             icon={<Clock className="h-5 w-5" />}
             color="bg-amber-500"
             bgColor="bg-amber-50"
             textColor="text-amber-700"
+            isActive={statusFilter === "OPEN"}
+            onClick={() => setStatusFilter("OPEN")}
           />
-          <StatCard
+          <ClickableStatCard
             label="En cours"
             count={stats.IN_PROGRESS}
             icon={<AlertCircle className="h-5 w-5" />}
             color="bg-blue-500"
             bgColor="bg-blue-50"
             textColor="text-blue-700"
+            isActive={statusFilter === "IN_PROGRESS"}
+            onClick={() => setStatusFilter("IN_PROGRESS")}
           />
-          <StatCard
+          <ClickableStatCard
             label="À clôturer"
             count={stats.A_CLOTURER}
             icon={<CheckCircle2 className="h-5 w-5" />}
             color="bg-violet-500"
             bgColor="bg-violet-50"
             textColor="text-violet-700"
+            isActive={statusFilter === "A_CLOTURER"}
+            onClick={() => setStatusFilter("A_CLOTURER")}
           />
-          <StatCard
+          <ClickableStatCard
             label="Rejetés"
             count={stats.REJETE}
             icon={<XCircle className="h-5 w-5" />}
             color="bg-rose-500"
             bgColor="bg-rose-50"
             textColor="text-rose-700"
+            isActive={statusFilter === "REJETE"}
+            onClick={() => setStatusFilter("REJETE")}
           />
-          <StatCard
+          <ClickableStatCard
             label="Transférés"
             count={stats.TRANSFERE_MANTICE}
             icon={<Send className="h-5 w-5" />}
             color="bg-indigo-500"
             bgColor="bg-indigo-50"
             textColor="text-indigo-700"
+            isActive={statusFilter === "TRANSFERE_MANTICE"}
+            onClick={() => setStatusFilter("TRANSFERE_MANTICE")}
           />
-          <StatCard
+          <ClickableStatCard
             label="Clôturés"
             count={stats.CLOSED}
             icon={<Archive className="h-5 w-5" />}
             color="bg-emerald-500"
             bgColor="bg-emerald-50"
             textColor="text-emerald-700"
+            isActive={statusFilter === "CLOSED"}
+            onClick={() => setStatusFilter("CLOSED")}
           />
         </div>
 
-        {/* Liste des tickets */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-200">
-            <h2 className="text-base font-semibold text-slate-900">Tous les tickets</h2>
-            <p className="text-sm text-slate-500 mt-1">
-              {tickets.length} ticket{tickets.length > 1 ? 's' : ''} au total
-            </p>
+        {/* Bouton Réinitialiser le filtre */}
+        {statusFilter !== "ALL" && (
+          <div className="flex justify-center">
+            <button
+              onClick={() => setStatusFilter("ALL")}
+              className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              ✕ Afficher tous les tickets
+            </button>
           </div>
-          
-          <div className="overflow-x-auto">
+        )}
+
+        {/* Liste des tickets */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          {/* Header */}
+          <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Tous les tickets</h2>
+              <p className="text-sm text-slate-500 mt-1">
+                {statusFilter === "ALL" ? tickets.length : filtered.length} ticket{
+                  (statusFilter === "ALL" ? tickets.length : filtered.length) > 1 ? "s" : ""
+                } {statusFilter !== "ALL" ? `(${statusLabel(statusFilter)})` : ""}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-slate-600">Afficher</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="border border-slate-300 rounded-lg px-2 py-1 bg-white"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+              </select>
+              <span className="text-slate-600">par page</span>
+            </div>
+          </div>
+
+          {/* Tableau */}
+          <div className="flex-1 overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-slate-50 border-b border-slate-200">
+              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
                     ID
@@ -409,14 +418,16 @@ export default function AdminTicketsDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {tickets.length === 0 && (
+                {filtered.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-6 py-8 text-center text-sm text-slate-500">
-                      Aucun ticket disponible
+                      {statusFilter === "ALL"
+                        ? "Aucun ticket disponible"
+                        : `Aucun ticket ${statusLabel(statusFilter).toLowerCase()}`}
                     </td>
                   </tr>
                 )}
-                {tickets.map((ticket) => (
+                {paginated.map((ticket) => (
                   <tr key={ticket.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-sm font-mono font-medium text-slate-900">
@@ -472,6 +483,31 @@ export default function AdminTicketsDashboard() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination */}
+          {filtered.length > 0 && (
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+              <span className="text-sm text-slate-600">
+                Page {page} / {totalPages} • {filtered.length} ticket{filtered.length > 1 ? "s" : ""}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  disabled={page === 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors text-sm font-medium"
+                >
+                  ← Précédent
+                </button>
+                <button
+                  disabled={page === totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors text-sm font-medium"
+                >
+                  Suivant →
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </main>
 
@@ -479,7 +515,6 @@ export default function AdminTicketsDashboard() {
       {modalOpen && activeTicket && (
         <Modal onClose={closeModal} title={`Ticket #${activeTicket.id}`}>
           <div className="space-y-6">
-            {/* En-tête ticket */}
             <div className="space-y-3">
               <h3 className="text-base font-semibold text-slate-900">
                 {activeTicket.description || "(Sans titre)"}
@@ -505,7 +540,6 @@ export default function AdminTicketsDashboard() {
               </div>
             </div>
 
-            {/* Gestion */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -531,10 +565,7 @@ export default function AdminTicketsDashboard() {
                 </label>
                 <select
                   onChange={(e) =>
-                    handleStatusChange(
-                      activeTicket.id,
-                      e.target.value as Ticket["statut"]
-                    )
+                    handleStatusChange(activeTicket.id, e.target.value as Ticket["statut"])
                   }
                   value={activeTicket.statut}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
@@ -548,13 +579,11 @@ export default function AdminTicketsDashboard() {
               </div>
             </div>
 
-            {/* Pièces jointes */}
             <div>
               <h4 className="text-sm font-medium text-slate-900 mb-3">Pièces jointes</h4>
               <AttachmentList ticketId={activeTicket.id} />
             </div>
 
-            {/* Lien page complète */}
             <div className="pt-4 border-t border-slate-200">
               <Link
                 href={`/dashboard/admin-tickets/${activeTicket.id}`}
@@ -573,16 +602,15 @@ export default function AdminTicketsDashboard() {
   );
 }
 
-/* ==========================================
-   Composants auxiliaires
-   ========================================== */
-function StatCard({
+function ClickableStatCard({
   label,
   count,
   icon,
   color,
   bgColor,
   textColor,
+  isActive,
+  onClick,
 }: {
   label: string;
   count: number;
@@ -590,9 +618,18 @@ function StatCard({
   color: string;
   bgColor: string;
   textColor: string;
+  isActive: boolean;
+  onClick: () => void;
 }) {
   return (
-    <div className={`${bgColor} rounded-xl p-4 border border-slate-200`}>
+    <button
+      onClick={onClick}
+      className={`${bgColor} rounded-xl p-4 border-2 transition-all cursor-pointer text-left ${
+        isActive
+          ? `border-${color.split("-")[1]}-500 shadow-lg scale-105`
+          : "border-slate-200 hover:border-slate-300 hover:shadow-md"
+      }`}
+    >
       <div className="flex items-center justify-between mb-2">
         <div className={`${color} text-white p-2 rounded-lg`}>
           {icon}
@@ -602,7 +639,7 @@ function StatCard({
         <p className={`text-2xl font-bold ${textColor}`}>{count}</p>
         <p className="text-sm text-slate-600 mt-1">{label}</p>
       </div>
-    </div>
+    </button>
   );
 }
 
