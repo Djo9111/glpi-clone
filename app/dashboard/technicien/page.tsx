@@ -26,6 +26,7 @@ type Ticket = {
   assignedTo?: { id: number; prenom: string; nom: string } | null;
   application?: { id: number; nom: string } | null;
   materiel?: { id: number; nom: string } | null;
+  manticeNumero?: string | null;  // ✅ ajouté
 };
 
 type PieceJointe = { id: number; nomFichier: string; url: string };
@@ -80,6 +81,7 @@ function normalizeTicket(raw: any): Ticket {
       : null,
     application: raw.application ? { id: Number(raw.application.id), nom: String(raw.application.nom ?? "") } : null,
     materiel: raw.materiel ? { id: Number(raw.materiel.id), nom: String(raw.materiel.nom ?? "") } : null,
+    manticeNumero: raw.manticeNumero ?? null, // ✅ ajouté
   };
 }
 
@@ -94,6 +96,8 @@ export default function TechnicianTicketsDashboard() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
+  const [manticeNumeroInput, setManticeNumeroInput] = useState<string>("");   // ✅ input modal
+  const [showManticeInput, setShowManticeInput] = useState<boolean>(false);   // ✅ affichage conditionnel
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -142,28 +146,76 @@ export default function TechnicianTicketsDashboard() {
     if (user) fetchTickets();
   }, [user, fetchTickets]);
 
-  const handleStatusChange = async (ticketId: number, newStatus: Ticket["statut"]) => {
+  // ✅ centralise la MAJ locale après un update
+  const applyUpdatedTicket = (updated: any) => {
+    const normalized = normalizeTicket(updated);
+    setTickets((prev) => prev.map((t) => (t.id === normalized.id ? normalized : t)));
+    setActiveTicket((prev) => (prev && prev.id === normalized.id ? normalized : prev));
+  };
+
+  const patchTicket = async (ticketId: number, payload: Record<string, any>) => {
     const token = localStorage.getItem("token");
-    if (!token) return;
-    try {
-      const res = await fetch(`/api/technicien/tickets/${ticketId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ statut: newStatus }),
-      });
-      const updated = await res.json();
-      if (!res.ok) {
-        alert(updated?.error || "Erreur mise à jour du statut");
-        return;
+    if (!token) return { ok: false, data: null };
+    const res = await fetch(`/api/technicien/tickets/${ticketId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    return { ok: res.ok, data };
+  };
+
+  const handleStatusChange = async (ticketId: number, newStatus: Ticket["statut"]) => {
+    // Cas spécifique Mantice : si aucun numéro connu, on affiche l'input et on ne PATCH que quand l’utilisateur valide
+    if (newStatus === "TRANSFERE_MANTICE") {
+      setShowManticeInput(true);
+      if (activeTicket?.manticeNumero) {
+        // S'il y a déjà un numéro, on tente directement
+        const { ok, data } = await patchTicket(ticketId, { statut: "TRANSFERE_MANTICE", manticeNumero: activeTicket.manticeNumero });
+        if (!ok) {
+          alert(data?.error || "Erreur mise à jour du statut");
+          return;
+        }
+        applyUpdatedTicket(data);
+        alert("Ticket transféré à MANTICE !");
+      } else {
+        // Laisse l’utilisateur saisir puis cliquer sur “Valider Mantice”
+        alert("Veuillez renseigner le numéro Mantice puis valider.");
       }
-      const normalized = normalizeTicket(updated);
-      setTickets((prev) => prev.map((t) => (t.id === normalized.id ? normalized : t)));
-      setActiveTicket((prev) => (prev && prev.id === normalized.id ? normalized : prev));
-      alert("Statut mis à jour !");
-    } catch (e) {
-      console.error(e);
-      alert("Erreur mise à jour du statut");
+      return;
     }
+
+    const { ok, data } = await patchTicket(ticketId, { statut: newStatus });
+    if (!ok) {
+      alert(data?.error || "Erreur mise à jour du statut");
+      return;
+    }
+    applyUpdatedTicket(data);
+    alert("Statut mis à jour !");
+  };
+
+  // ✅ enregistrer / modifier le numéro Mantice (avec transfert si nécessaire)
+  const handleSaveMantice = async () => {
+    if (!activeTicket) return;
+    const numero = manticeNumeroInput.trim();
+    if (!numero) {
+      alert("Veuillez saisir un numéro Mantice.");
+      return;
+    }
+    // Si pas encore transféré → on transfère + pose le numéro
+    const payload =
+      activeTicket.statut === "TRANSFERE_MANTICE"
+        ? { manticeNumero: numero }
+        : { statut: "TRANSFERE_MANTICE", manticeNumero: numero };
+
+    const { ok, data } = await patchTicket(activeTicket.id, payload);
+    if (!ok) {
+      alert(data?.error || "Impossible d’enregistrer le numéro Mantice");
+      return;
+    }
+    applyUpdatedTicket(data);
+    alert("Numéro Mantice enregistré !");
+    setShowManticeInput(false);
   };
 
   const handleLogout = () => {
@@ -182,12 +234,16 @@ export default function TechnicianTicketsDashboard() {
 
   const openModal = (t: Ticket) => {
     setActiveTicket(t);
+    setManticeNumeroInput(t.manticeNumero ?? "");           // ✅ init input
+    setShowManticeInput(t.statut === "TRANSFERE_MANTICE");  // ✅ si déjà transféré → montrer l’input
     setModalOpen(true);
   };
 
   const closeModal = () => {
     setModalOpen(false);
     setActiveTicket(null);
+    setManticeNumeroInput("");
+    setShowManticeInput(false);
   };
 
   const StatusOptions: Ticket["statut"][] = [
@@ -355,6 +411,9 @@ export default function TechnicianTicketsDashboard() {
                             {ticket.materiel?.nom && `Mat: ${ticket.materiel.nom}`}
                           </p>
                         )}
+                        {ticket.manticeNumero && ( // ✅ affichage rapide
+                          <p className="text-xs text-indigo-700 mt-1">MANTICE: {ticket.manticeNumero}</p>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -424,6 +483,9 @@ export default function TechnicianTicketsDashboard() {
                 {activeTicket.assignedTo && (
                   <p>Assigné à: <span className="font-medium">{activeTicket.assignedTo.prenom} {activeTicket.assignedTo.nom}</span></p>
                 )}
+                {activeTicket.manticeNumero && (
+                  <p className="mt-1 text-indigo-700">MANTICE: <span className="font-mono">{activeTicket.manticeNumero}</span></p>
+                )}
               </div>
             </div>
 
@@ -450,6 +512,35 @@ export default function TechnicianTicketsDashboard() {
               </select>
             </div>
 
+            {/* Section Mantice (affichée si transféré ou si l’utilisateur a choisi ce statut) */}
+            {(showManticeInput || activeTicket.statut === "TRANSFERE_MANTICE") && (
+              <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 space-y-3">
+                <p className="text-sm font-medium text-indigo-800">
+                  Numéro MANTICE (obligatoire si “Transféré MANTICE”)
+                </p>
+                <input
+                  value={manticeNumeroInput}
+                  onChange={(e) => setManticeNumeroInput(e.target.value)}
+                  placeholder="Ex: MNT-2025-000123"
+                  className="w-full border border-indigo-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSaveMantice}
+                    className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+                  >
+                    <Send className="h-4 w-4" />
+                    Valider Mantice
+                  </button>
+                  {activeTicket.manticeNumero && (
+                    <span className="text-xs text-indigo-700">
+                      Actuel: <span className="font-mono">{activeTicket.manticeNumero}</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Actions rapides */}
             <div>
               <p className="text-sm font-medium text-slate-700 mb-3">Actions rapides</p>
@@ -469,7 +560,14 @@ export default function TechnicianTicketsDashboard() {
                   À clôturer
                 </button>
                 <button
-                  onClick={() => handleStatusChange(activeTicket.id, "TRANSFERE_MANTICE")}
+                  onClick={() => {
+                    setShowManticeInput(true);
+                    if (!activeTicket.manticeNumero) {
+                      alert("Saisissez le numéro Mantice puis cliquez sur “Valider Mantice”.");
+                    } else {
+                      handleStatusChange(activeTicket.id, "TRANSFERE_MANTICE");
+                    }
+                  }}
                   className="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors"
                 >
                   <Send className="h-4 w-4" />
@@ -553,7 +651,7 @@ function StatusBadge({ status }: { status: Ticket["statut"] }) {
     CLOSED: { label: "Clôturé", className: "bg-emerald-100 text-emerald-800" },
   };
 
-  const { label, className } = config[status];
+  const { label, className } = (config as any)[status];
   return (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${className}`}>
       {label}

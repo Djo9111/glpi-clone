@@ -1,4 +1,3 @@
-// app/api/technicien/tickets/[id]/route.ts
 import { NextResponse } from "next/server";
 import { PrismaClient, Statut } from "@prisma/client";
 import jwt from "jsonwebtoken";
@@ -60,24 +59,25 @@ export async function PATCH(
     return NextResponse.json({ error: "Paramètre invalide" }, { status: 400 });
   }
 
-  const body = await req.json() as { 
-    statut?: "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "REJETE" | "TRANSFERE_MANTICE" | "CLOSED" 
+  const body = (await req.json().catch(() => ({}))) as {
+    statut?: "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "REJETE" | "TRANSFERE_MANTICE" | "CLOSED";
+    manticeNumero?: string;
   };
 
-  // Vérifier que le ticket est bien assigné à ce technicien
-  const current = await prisma.ticket.findFirst({ where: { id: ticketId, assignedToId: payload.id } });
+  // Ticket bien assigné à ce technicien ?
+  const current = await prisma.ticket.findFirst({
+    where: { id: ticketId, assignedToId: payload.id },
+  });
   if (!current) return NextResponse.json({ error: "Ticket introuvable" }, { status: 404 });
 
-  // Préparer les champs calculés selon la transition
-  const data: any = {};
+  const data: Record<string, any> = {};
   const now = new Date();
 
-  // Si on passe en IN_PROGRESS et qu'on n'a pas encore pris en charge
+  // --- logique statut générique (prise en charge / clôture) ---
   if (body.statut === "IN_PROGRESS" && !current.prisEnChargeAt) {
     data.prisEnChargeAt = now;
   }
 
-  // Si on passe en CLOSED → écrire clotureAt + durée
   if (body.statut === "CLOSED" && current.statut !== Statut.CLOSED) {
     const start = current.prisEnChargeAt ?? current.dateCreation;
     const dureeTraitementMinutes = Math.max(
@@ -88,9 +88,56 @@ export async function PATCH(
     data.dureeTraitementMinutes = dureeTraitementMinutes;
   }
 
-  // Appliquer le statut demandé (si fourni)
-  if (body.statut) {
+  // --- logique Mantice ---
+  const manticeNumeroFromBody = typeof body.manticeNumero === "string"
+    ? body.manticeNumero.trim()
+    : undefined;
+
+  // 1) Transition vers TRANSFERE_MANTICE : exiger un numéro (soit fourni maintenant, soit déjà existant)
+  if (body.statut === "TRANSFERE_MANTICE" && current.statut !== Statut.TRANSFERE_MANTICE) {
+    const numeroEffectif = manticeNumeroFromBody ?? current.manticeNumero ?? null;
+    if (!numeroEffectif) {
+      return NextResponse.json(
+        { error: "Le numéro Mantice est requis lors du passage à TRANSFERE_MANTICE." },
+        { status: 400 }
+      );
+    }
+    data.statut = "TRANSFERE_MANTICE" as Statut;
+    data.manticeNumero = numeroEffectif;
+
+    // Poser manticeAt si absent
+    if (!current.manticeAt) {
+      data.manticeAt = now;
+    }
+  }
+
+  // 2) Mise à jour du numéro Mantice seule (sans changer de statut)
+  if (
+    manticeNumeroFromBody &&
+    manticeNumeroFromBody !== current.manticeNumero
+  ) {
+    data.manticeNumero = manticeNumeroFromBody;
+
+    // Si le ticket est (ou devient) TRANSFERE_MANTICE et qu'on n'a pas de date → poser manticeAt
+    const statutFinal = (data.statut as Statut) ?? current.statut;
+    if (statutFinal === Statut.TRANSFERE_MANTICE && !current.manticeAt) {
+      data.manticeAt = now;
+    }
+  }
+
+  // 3) Autre changement de statut (ni CLOSED, ni IN_PROGRESS, ni TRANSFERE_MANTICE)
+  if (
+    body.statut &&
+    body.statut !== "CLOSED" &&
+    body.statut !== "IN_PROGRESS" &&
+    body.statut !== "TRANSFERE_MANTICE"
+  ) {
     data.statut = body.statut as Statut;
+  }
+
+  if (Object.keys(data).length === 0) {
+    // rien à modifier
+    return NextResponse.json({ message: "Aucune modification" });
   }
 
   const updated = await prisma.ticket.update({

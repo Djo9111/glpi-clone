@@ -20,7 +20,7 @@ export async function GET(request: Request) {
         createdBy: { select: { id: true, prenom: true, nom: true, email: true } },
         assignedTo: { select: { id: true, prenom: true, nom: true } },
         application: true,
-        materiel: true
+        materiel: true,
       },
       orderBy: { dateCreation: "desc" },
     });
