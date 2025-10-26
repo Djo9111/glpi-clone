@@ -9,7 +9,14 @@ const JWT_SECRET = process.env.JWT_SECRET || "secret123";
 function getUser(request: Request) {
   const token = request.headers.get("Authorization")?.replace("Bearer ", "");
   if (!token) return null;
-  try { return jwt.verify(token, JWT_SECRET) as { id: number; role: "EMPLOYE"|"TECHNICIEN"|"CHEF_DSI" }; }
+  try { 
+    return jwt.verify(token, JWT_SECRET) as { 
+      id: number; 
+      role: "EMPLOYE"|"TECHNICIEN"|"CHEF_DSI";
+      codeHierarchique: number;
+      departementId: number | null;
+    }; 
+  }
   catch { return null; }
 }
 
@@ -23,8 +30,15 @@ export async function GET(request: Request) {
       where,
       orderBy: [{ role: "asc" }, { nom: "asc" }, { prenom: "asc" }],
       select: {
-        id: true, nom: true, prenom: true, email: true, role: true, matricule: true,
-        departement: { select: { id: true, nom: true } }, departementId: true,
+        id: true, 
+        nom: true, 
+        prenom: true, 
+        email: true, 
+        role: true, 
+        matricule: true,
+        codeHierarchique: true,
+        departement: { select: { id: true, nom: true } }, 
+        departementId: true,
       },
     });
     return NextResponse.json(users);
@@ -48,12 +62,16 @@ export async function POST(request: Request) {
     const role: Role = (body?.role as Role) ?? "EMPLOYE";
     const departementId = body?.departementId != null ? Number(body.departementId) : undefined;
     const matricule = body?.matricule ? String(body.matricule).trim() : undefined;
+    const codeHierarchique = body?.codeHierarchique != null ? Number(body.codeHierarchique) : 0;
 
     if (!nom || !prenom || !email || !motDePasse) {
       return NextResponse.json({ error: "Champs requis: nom, prenom, email, motDePasse." }, { status: 400 });
     }
     if (!Object.values(Role).includes(role)) {
       return NextResponse.json({ error: "Role invalide." }, { status: 400 });
+    }
+    if (!Number.isInteger(codeHierarchique) || codeHierarchique < 0) {
+      return NextResponse.json({ error: "codeHierarchique doit être un entier >= 0." }, { status: 400 });
     }
 
     if (departementId) {
@@ -64,7 +82,10 @@ export async function POST(request: Request) {
     // Idempotence légère: si email déjà présent (insensible à la casse), renvoyer l'existant 200
     const existingByEmail = await prisma.utilisateur.findFirst({
       where: { email: { equals: email, mode: "insensitive" } },
-      select: { id: true, nom: true, prenom: true, email: true, role: true, matricule: true, departementId: true },
+      select: { 
+        id: true, nom: true, prenom: true, email: true, role: true, 
+        matricule: true, departementId: true, codeHierarchique: true 
+      },
     });
     if (existingByEmail) return NextResponse.json(existingByEmail, { status: 200 });
 
@@ -81,10 +102,14 @@ export async function POST(request: Request) {
     const created = await prisma.utilisateur.create({
       data: {
         nom, prenom, email, motDePasse: hash, role,
+        codeHierarchique,
         ...(departementId ? { departementId } : {}),
         ...(matricule ? { matricule } : {}),
       },
-      select: { id: true, nom: true, prenom: true, email: true, role: true, matricule: true, departementId: true },
+      select: { 
+        id: true, nom: true, prenom: true, email: true, role: true, 
+        matricule: true, departementId: true, codeHierarchique: true 
+      },
     });
 
     return NextResponse.json(created, { status: 201 });

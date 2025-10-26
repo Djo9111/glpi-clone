@@ -11,15 +11,68 @@ function getUser(req: Request) {
   const auth = req.headers.get("authorization") || "";
   const token = auth.replace("Bearer ", "");
   if (!token) throw new Error("NO_TOKEN");
-  return jwt.verify(token, JWT_SECRET) as any; // { id, role, ... }
+  return jwt.verify(token, JWT_SECRET) as {
+    id: number;
+    role: string;
+    codeHierarchique: number;
+    departementId: number | null;
+  };
+}
+
+/**
+ * Vérifier si l'utilisateur peut voir ce ticket
+ * - CHEF_DSI : voit tout
+ * - TECHNICIEN : ses tickets assignés + ses propres tickets
+ * - EMPLOYE : ses tickets + tickets de ses subordonnés (même département, code inférieur)
+ */
+async function canAccessTicket(userId: number, userRole: string, userCode: number, userDept: number | null, ticketId: number) {
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: ticketId },
+    select: {
+      assignedToId: true,
+      createdById: true,
+      createdBy: {
+        select: {
+          departementId: true,
+          codeHierarchique: true,
+        },
+      },
+    },
+  });
+
+  if (!ticket) return { allowed: false, ticket: null };
+
+  // CHEF_DSI voit tout
+  if (userRole === "CHEF_DSI") return { allowed: true, ticket };
+
+  // TECHNICIEN : tickets assignés ou créés par lui
+  if (userRole === "TECHNICIEN") {
+    const allowed = userId === ticket.assignedToId || userId === ticket.createdById;
+    return { allowed, ticket };
+  }
+
+  // EMPLOYE : ses tickets OU tickets de ses subordonnés
+  if (userId === ticket.createdById) return { allowed: true, ticket };
+
+  // Vérifier si c'est un subordonné (même département + code inférieur)
+  if (
+    userCode > 0 &&
+    userDept &&
+    ticket.createdBy.departementId === userDept &&
+    ticket.createdBy.codeHierarchique < userCode
+  ) {
+    return { allowed: true, ticket };
+  }
+
+  return { allowed: false, ticket };
 }
 
 // GET /api/tickets/:id/comments
 export async function GET(
   req: Request,
-  ctx: { params: Promise<{ id: string }> } // params est un Promise
+  ctx: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await ctx.params; // on attend params
+  const { id } = await ctx.params;
   const ticketId = Number(id);
   if (Number.isNaN(ticketId)) {
     return NextResponse.json({ error: "ID invalide" }, { status: 400 });
@@ -28,16 +81,18 @@ export async function GET(
   try {
     const me = getUser(req);
 
-    // Accès : technicien assigné, chef DSI ou créateur du ticket
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: ticketId },
-      select: { assignedToId: true, createdById: true },
-    });
-    if (!ticket) return NextResponse.json({ error: "Ticket introuvable" }, { status: 404 });
+    // Vérifier l'accès avec la logique hiérarchique
+    const { allowed } = await canAccessTicket(
+      me.id,
+      me.role,
+      me.codeHierarchique,
+      me.departementId,
+      ticketId
+    );
 
-    const canSee =
-      me.role === "CHEF_DSI" || me.id === ticket.assignedToId || me.id === ticket.createdById;
-    if (!canSee) return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+    if (!allowed) {
+      return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+    }
 
     const comments = await prisma.commentaire.findMany({
       where: { ticketId },
@@ -52,8 +107,9 @@ export async function GET(
 
     return NextResponse.json(comments);
   } catch (e: any) {
-    const code = e?.name === "JsonWebTokenError" ? 401 : 500;
-    return NextResponse.json({ error: "Erreur d’authentification" }, { status: code });
+    console.error("GET comments error:", e);
+    const code = e?.name === "JsonWebTokenError" || e?.message === "NO_TOKEN" ? 401 : 500;
+    return NextResponse.json({ error: "Erreur d'authentification" }, { status: code });
   }
 }
 
@@ -80,15 +136,22 @@ export async function POST(
       return NextResponse.json({ error: "Commentaire trop long (max 4000)" }, { status: 400 });
     }
 
-    // Autorisation : technicien assigné, chef DSI **ou créateur du ticket (employé)**
     const ticket = await prisma.ticket.findUnique({
       where: { id: ticketId },
       select: { assignedToId: true, createdById: true },
     });
-    if (!ticket) return NextResponse.json({ error: "Ticket introuvable" }, { status: 404 });
 
+    if (!ticket) {
+      return NextResponse.json({ error: "Ticket introuvable" }, { status: 404 });
+    }
+
+    // Pour COMMENTER : seulement le technicien assigné, chef DSI ou créateur du ticket
+    // Les supérieurs hiérarchiques peuvent VOIR mais pas COMMENTER (logique métier)
     const allowed =
-      me.role === "CHEF_DSI" || me.id === ticket.assignedToId || me.id === ticket.createdById;
+      me.role === "CHEF_DSI" ||
+      me.id === ticket.assignedToId ||
+      me.id === ticket.createdById;
+
     if (!allowed) {
       return NextResponse.json(
         { error: "Seuls le technicien assigné, le chef DSI ou le créateur peuvent commenter" },
@@ -110,11 +173,10 @@ export async function POST(
       },
     });
 
-    // (optionnel) créer une Notification ici…
-
     return NextResponse.json(created, { status: 201 });
   } catch (e: any) {
-    const code = e?.name === "JsonWebTokenError" ? 401 : 500;
+    console.error("POST comment error:", e);
+    const code = e?.name === "JsonWebTokenError" || e?.message === "NO_TOKEN" ? 401 : 500;
     return NextResponse.json({ error: "Erreur serveur ou authentification" }, { status: code });
   }
 }

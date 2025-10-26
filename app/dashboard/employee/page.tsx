@@ -20,6 +20,16 @@ type Ticket = {
   statut: TicketStatut;
   dateCreation: string;
   assignedTo?: { id: number; prenom: string; nom: string } | null;
+  createdBy?: { id: number; prenom: string; nom: string } | null;
+};
+
+type SubordinateUser = {
+  id: number;
+  prenom: string;
+  nom: string;
+  email: string;
+  codeHierarchique: number;
+  departement?: { id: number; nom: string } | null;
 };
 
 type PieceJointe = { id: number; nomFichier: string; url: string };
@@ -64,6 +74,13 @@ function normalizeTicket(raw: any): Ticket {
           nom: String(raw.assignedTo.nom ?? ""),
         }
       : null,
+    createdBy: raw.createdBy
+      ? {
+          id: Number(raw.createdBy.id),
+          prenom: String(raw.createdBy.prenom ?? ""),
+          nom: String(raw.createdBy.nom ?? ""),
+        }
+      : null,
   };
 }
 
@@ -71,8 +88,15 @@ export default function EmployeeDashboard() {
   const router = useRouter();
 
   // —— Session / onglet ——
-  const [user, setUser] = useState<{ id: number; nom: string; prenom: string; role: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<"form" | "tickets">("form");
+  const [user, setUser] = useState<{ 
+    id: number; 
+    nom: string; 
+    prenom: string; 
+    role: string;
+    codeHierarchique: number;
+    departementId: number | null;
+  } | null>(null);
+  const [activeTab, setActiveTab] = useState<"form" | "tickets" | "subordinates">("form");
 
   // —— Formulaire ——
   const [ticketForm, setTicketForm] = useState<TicketForm>({
@@ -90,11 +114,18 @@ export default function EmployeeDashboard() {
   const [materiels, setMateriels] = useState<Materiel[]>([]);
   const [loadingCats, setLoadingCats] = useState(false);
 
+  // —— Subordonnés (nouveau) ——
+  const [subordinates, setSubordinates] = useState<SubordinateUser[]>([]);
+  const [loadingSubordinates, setLoadingSubordinates] = useState(false);
+  const [selectedSubordinate, setSelectedSubordinate] = useState<SubordinateUser | null>(null);
+  const [subordinateTickets, setSubordinateTickets] = useState<Ticket[]>([]);
+  const [loadingSubTickets, setLoadingSubTickets] = useState(false);
+
   // —— Filtres / pagination ——
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | TicketStatut>("ALL");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<5 | 10 | 20 | 50>(10); // ← sélecteur par page
+  const [pageSize, setPageSize] = useState<5 | 10 | 20 | 50>(10);
 
   // —— Sélection ——
   const [selected, setSelected] = useState<Ticket | null>(null);
@@ -115,7 +146,14 @@ export default function EmployeeDashboard() {
         router.push("/login");
         return;
       }
-      setUser(payload);
+      setUser({
+        id: payload.id,
+        nom: payload.nom,
+        prenom: payload.prenom,
+        role: payload.role,
+        codeHierarchique: payload.codeHierarchique || 0,
+        departementId: payload.departementId || null,
+      });
     } catch (error) {
       console.error("Erreur JWT :", error);
       router.push("/login");
@@ -171,11 +209,73 @@ export default function EmployeeDashboard() {
     }
   }, []);
 
+  // Récupérer la liste des subordonnés visibles
+  const fetchSubordinates = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    if (!token || !user) return;
+    
+    // Si l'utilisateur n'a pas de code hiérarchique > 0, pas de subordonnés
+    if (user.codeHierarchique === 0 || !user.departementId) {
+      setSubordinates([]);
+      return;
+    }
+
+    setLoadingSubordinates(true);
+    try {
+      const res = await fetch("/api/employee/subordinates", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        console.error("Erreur récupération subordonnés:", data.error);
+        setSubordinates([]);
+        return;
+      }
+      setSubordinates(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error(e);
+      setSubordinates([]);
+    } finally {
+      setLoadingSubordinates(false);
+    }
+  }, [user]);
+
   useEffect(() => {
     if (!user) return;
     fetchMyTickets();
     fetchCategories();
-  }, [user, fetchMyTickets, fetchCategories]);
+    fetchSubordinates();
+  }, [user, fetchMyTickets, fetchCategories, fetchSubordinates]);
+
+  // Récupérer les tickets d'un subordonné
+  const fetchSubordinateTickets = useCallback(async (userId: number) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    
+    setLoadingSubTickets(true);
+    try {
+      const res = await fetch(`/api/tickets?userId=${userId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Erreur récupération des tickets");
+        setSubordinateTickets([]);
+        return;
+      }
+      const list = Array.isArray(data) ? data : [];
+      const normalized: Ticket[] = list.map(normalizeTicket);
+      setSubordinateTickets(normalized);
+    } catch (e) {
+      console.error(e);
+      alert("Erreur récupération des tickets");
+      setSubordinateTickets([]);
+    } finally {
+      setLoadingSubTickets(false);
+    }
+  }, []);
 
   // ————————————————————————————————————————
   // Form handlers
@@ -261,7 +361,7 @@ export default function EmployeeDashboard() {
   };
 
   // ————————————————————————————————————————
-  // Filtres + pagination
+  // Filtres + pagination (tickets personnels)
   // ————————————————————————————————————————
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -278,7 +378,6 @@ export default function EmployeeDashboard() {
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
 
-  // Reset page si filtres changent
   useEffect(() => {
     setPage(1);
   }, [query, statusFilter, pageSize]);
@@ -288,12 +387,47 @@ export default function EmployeeDashboard() {
     return filtered.slice(start, start + pageSize);
   }, [filtered, page, pageSize]);
 
+  // ————————————————————————————————————————
+  // Filtres pour tickets des subordonnés
+  // ————————————————————————————————————————
+  const [subQuery, setSubQuery] = useState("");
+  const [subStatusFilter, setSubStatusFilter] = useState<"ALL" | TicketStatut>("ALL");
+  const [subPage, setSubPage] = useState(1);
+  const [subPageSize, setSubPageSize] = useState<5 | 10 | 20 | 50>(10);
+
+  const filteredSubTickets = useMemo(() => {
+    const q = subQuery.trim().toLowerCase();
+    return subordinateTickets.filter((t) => {
+      const okStatus = subStatusFilter === "ALL" ? true : t.statut === subStatusFilter;
+      const okQuery =
+        !q ||
+        t.description.toLowerCase().includes(q) ||
+        String(t.id).includes(q) ||
+        (t.assignedTo && `${t.assignedTo.prenom} ${t.assignedTo.nom}`.toLowerCase().includes(q));
+      return okStatus && okQuery;
+    });
+  }, [subordinateTickets, subQuery, subStatusFilter]);
+
+  const subTotalPages = Math.max(1, Math.ceil(filteredSubTickets.length / subPageSize));
+
+  useEffect(() => {
+    setSubPage(1);
+  }, [subQuery, subStatusFilter, subPageSize]);
+
+  const paginatedSubTickets = useMemo(() => {
+    const start = (subPage - 1) * subPageSize;
+    return filteredSubTickets.slice(start, start + subPageSize);
+  }, [filteredSubTickets, subPage, subPageSize]);
+
   const displayName = user ? `${user.prenom} ${user.nom}` : "…";
 
   const handleLocalStatusUpdated = (id: number, newStatut: TicketStatut) => {
     setTickets((prev) => prev.map((t) => (t.id === id ? { ...t, statut: newStatut } : t)));
+    setSubordinateTickets((prev) => prev.map((t) => (t.id === id ? { ...t, statut: newStatut } : t)));
     setSelected((prev) => (prev && prev.id === id ? { ...prev, statut: newStatut } : prev));
   };
+
+  const showSubordinatesTab = user && user.codeHierarchique > 0 && user.departementId && subordinates.length > 0;
 
   return (
     <div className="min-h-screen flex flex-col bg-white">
@@ -305,7 +439,10 @@ export default function EmployeeDashboard() {
             <div className="h-6 w-px bg-slate-200" />
             <div className="leading-tight">
               <h1 className="font-semibold text-slate-800 text-sm md:text-base">Bienvenue, {displayName}</h1>
-              <p className="text-[11px] text-slate-500">Portail de support technique</p>
+              <p className="text-[11px] text-slate-500">
+                Portail de support technique
+                {user && user.codeHierarchique > 0 && ` • Niveau hiérarchique: ${user.codeHierarchique}`}
+              </p>
             </div>
           </div>
           <button
@@ -339,6 +476,22 @@ export default function EmployeeDashboard() {
             >
               Mes tickets
             </button>
+            {showSubordinatesTab && (
+              <button
+                onClick={() => {
+                  setActiveTab("subordinates");
+                  setSelectedSubordinate(null);
+                  setSubordinateTickets([]);
+                }}
+                className={`px-3 md:px-4 py-2 text-sm border-b-2 ${
+                  activeTab === "subordinates"
+                    ? "border-green-500 text-green-700"
+                    : "border-transparent text-slate-600 hover:text-slate-800"
+                }`}
+              >
+                Mon équipe ({subordinates.length})
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -485,10 +638,9 @@ export default function EmployeeDashboard() {
             </div>
           )}
 
-          {/* —— Tickets —— */}
+          {/* —— Mes Tickets —— */}
           {activeTab === "tickets" && (
             <div className="flex flex-col gap-3">
-              {/* Barre d’outils compacte + sticky */}
               <div className="sticky top-[81px] z-40 bg-white/95 backdrop-blur border border-slate-200 rounded-md p-2">
                 <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3">
                   <div className="flex items-center gap-2">
@@ -516,7 +668,6 @@ export default function EmployeeDashboard() {
                       <option value="CLOSED">Clôturés</option>
                     </select>
 
-                    {/* — Sélecteur par page — */}
                     <div className="flex items-center gap-1">
                       <span className="text-[11px] text-slate-500">Afficher</span>
                       <select
@@ -563,7 +714,6 @@ export default function EmployeeDashboard() {
 
               {user && !loading && paginated.length > 0 && (
                 <div className="rounded-md border border-slate-200 bg-white shadow-sm overflow-hidden">
-                  {/* Liste plus compacte */}
                   <ul className="max-h-[520px] overflow-y-auto divide-y divide-slate-100">
                     {paginated.map((t) => (
                       <li
@@ -602,7 +752,6 @@ export default function EmployeeDashboard() {
                     ))}
                   </ul>
 
-                  {/* Pagination + résumé */}
                   <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-200 bg-slate-50 text-sm">
                     <span className="text-slate-600">
                       Page {page} / {totalPages} • {filtered.length} demande{filtered.length > 1 ? "s" : ""} • {pageSize}/page
@@ -625,6 +774,240 @@ export default function EmployeeDashboard() {
                     </div>
                   </div>
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* —— Mon équipe (subordonnés) —— */}
+          {activeTab === "subordinates" && (
+            <div className="flex flex-col gap-3">
+              {!selectedSubordinate ? (
+                <>
+                  <div className="bg-white border border-slate-200 rounded-md p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      <h2 className="text-base font-semibold text-slate-800">
+                        Mon équipe ({subordinates.length})
+                      </h2>
+                    </div>
+                    <p className="text-sm text-slate-600 mb-4">
+                      Vous pouvez consulter les tickets des personnes de votre équipe. Cliquez sur un membre pour voir ses tickets.
+                    </p>
+
+                    {loadingSubordinates && (
+                      <div className="text-sm text-slate-500 p-4 text-center">Chargement...</div>
+                    )}
+
+                    {!loadingSubordinates && subordinates.length === 0 && (
+                      <div className="text-sm text-slate-500 p-4 text-center border-2 border-dashed border-slate-200 rounded-md">
+                        Aucun membre d'équipe sous votre supervision
+                      </div>
+                    )}
+
+                    {!loadingSubordinates && subordinates.length > 0 && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {subordinates.map((sub) => (
+                          <button
+                            key={sub.id}
+                            onClick={() => {
+                              setSelectedSubordinate(sub);
+                              fetchSubordinateTickets(sub.id);
+                            }}
+                            className="text-left border border-slate-200 rounded-lg p-4 hover:border-green-400 hover:bg-green-50/30 transition-all group"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="font-medium text-slate-800 group-hover:text-green-700">
+                                  {sub.prenom} {sub.nom}
+                                </div>
+                                <div className="text-xs text-slate-500 mt-0.5 truncate">{sub.email}</div>
+                                {sub.departement && (
+                                  <div className="text-xs text-slate-500 mt-1">
+                                    📁 {sub.departement.nom}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex flex-col items-end gap-1">
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
+                                  Code {sub.codeHierarchique}
+                                </span>
+                                <svg className="w-5 h-5 text-slate-400 group-hover:text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Vue des tickets du subordonné */}
+                  <div className="bg-white border border-slate-200 rounded-md p-3">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setSelectedSubordinate(null);
+                            setSubordinateTickets([]);
+                            setSubQuery("");
+                            setSubStatusFilter("ALL");
+                            setSubPage(1);
+                          }}
+                          className="p-1.5 rounded-md border border-slate-300 hover:bg-slate-50"
+                          title="Retour à la liste"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                          </svg>
+                        </button>
+                        <div>
+                          <h3 className="text-base font-semibold text-slate-800">
+                            Tickets de {selectedSubordinate.prenom} {selectedSubordinate.nom}
+                          </h3>
+                          <p className="text-xs text-slate-500">{selectedSubordinate.email}</p>
+                        </div>
+                      </div>
+                      <span className="text-xs px-2 py-1 rounded-full bg-green-50 text-green-700 border border-green-200">
+                        Code {selectedSubordinate.codeHierarchique}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="sticky top-[81px] z-40 bg-white/95 backdrop-blur border border-slate-200 rounded-md p-2">
+                    <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-slate-700">
+                          {subordinateTickets.length} ticket{subordinateTickets.length > 1 ? "s" : ""}
+                        </span>
+                      </div>
+                      <div className="flex-1" />
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="search"
+                          placeholder="Rechercher..."
+                          value={subQuery}
+                          onChange={(e) => setSubQuery(e.target.value)}
+                          className="h-9 w-[160px] md:w-[220px] rounded-md border border-slate-300 px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-100 focus:border-green-500"
+                        />
+                        <select
+                          value={subStatusFilter}
+                          onChange={(e) => setSubStatusFilter(e.target.value as "ALL" | TicketStatut)}
+                          className="h-9 rounded-md border border-slate-300 px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-100"
+                        >
+                          <option value="ALL">Tous</option>
+                          <option value="OPEN">Ouverts</option>
+                          <option value="IN_PROGRESS">En cours</option>
+                          <option value="A_CLOTURER">À clôturer</option>
+                          <option value="CLOSED">Clôturés</option>
+                        </select>
+
+                        <div className="flex items-center gap-1">
+                          <span className="text-[11px] text-slate-500">Afficher</span>
+                          <select
+                            value={subPageSize}
+                            onChange={(e) => setSubPageSize(Number(e.target.value) as 5 | 10 | 20 | 50)}
+                            className="h-9 rounded-md border border-slate-300 px-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-100"
+                          >
+                            <option value={5}>5</option>
+                            <option value={10}>10</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                          </select>
+                          <span className="text-[11px] text-slate-500">par page</span>
+                        </div>
+
+                        <button
+                          onClick={() => selectedSubordinate && fetchSubordinateTickets(selectedSubordinate.id)}
+                          className="h-9 text-sm rounded-md border border-slate-300 px-3 hover:bg-slate-50 bg-white transition-colors"
+                          title="Actualiser"
+                        >
+                          ⟳
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {loadingSubTickets && (
+                    <div className="rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-600">
+                      Chargement des tickets...
+                    </div>
+                  )}
+
+                  {!loadingSubTickets && paginatedSubTickets.length === 0 && (
+                    <div className="rounded-md border-2 border-dashed border-slate-200 bg-slate-50 p-6 text-slate-500 text-sm text-center">
+                      Aucun ticket trouvé
+                    </div>
+                  )}
+
+                  {!loadingSubTickets && paginatedSubTickets.length > 0 && (
+                    <div className="rounded-md border border-slate-200 bg-white shadow-sm overflow-hidden">
+                      <ul className="max-h-[520px] overflow-y-auto divide-y divide-slate-100">
+                        {paginatedSubTickets.map((t) => (
+                          <li
+                            key={t.id}
+                            onClick={() => setSelected(t)}
+                            className="cursor-pointer px-4 py-3 hover:bg-slate-50 transition-colors"
+                          >
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 text-[11px] text-slate-500 mb-0.5">
+                                  <span className="font-mono">#{t.id}</span>
+                                  <span>•</span>
+                                  <span>{new Date(t.dateCreation).toLocaleString()}</span>
+                                </div>
+                                <p className="text-sm font-medium text-slate-800 truncate">
+                                  {t.description || "(Sans titre)"}
+                                </p>
+                                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                  <span
+                                    className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                                      t.type === "ASSISTANCE"
+                                        ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                        : "bg-purple-50 text-purple-700 border border-purple-200"
+                                    }`}
+                                  >
+                                    {t.type === "ASSISTANCE" ? "Assistance" : "Intervention"}
+                                  </span>
+                                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-50 text-slate-700 border border-slate-200">
+                                    {t.assignedTo ? `${t.assignedTo.prenom} ${t.assignedTo.nom}` : "Non assigné"}
+                                  </span>
+                                </div>
+                              </div>
+                              <StatusChip statut={t.statut} />
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+
+                      <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-200 bg-slate-50 text-sm">
+                        <span className="text-slate-600">
+                          Page {subPage} / {subTotalPages} • {filteredSubTickets.length} ticket{filteredSubTickets.length > 1 ? "s" : ""} • {subPageSize}/page
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            disabled={subPage === 1}
+                            onClick={() => setSubPage((p) => Math.max(1, p - 1))}
+                            className="px-3 py-1.5 rounded-md border border-slate-300 bg-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                          >
+                            ← Précédent
+                          </button>
+                          <button
+                            disabled={subPage === subTotalPages}
+                            onClick={() => setSubPage((p) => Math.min(subTotalPages, p + 1))}
+                            className="px-3 py-1.5 rounded-md border border-slate-300 bg-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                          >
+                            Suivant →
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -731,7 +1114,7 @@ function TicketDrawer({
 
   const steps = ["Créé", "Assigné", "En cours", "À clôturer", "Clôturé"];
 
-  const canClose = ticket.statut === "A_CLOTURER" && !!user;
+  const canClose = ticket.statut === "A_CLOTURER" && !!user && ticket.createdBy?.id === user.id;
 
   const handleAddComment = async () => {
     const token = localStorage.getItem("token");
@@ -849,6 +1232,12 @@ function TicketDrawer({
           <span className={`px-2 py-0.5 rounded-md text-xs font-medium ${ticket.type === "ASSISTANCE" ? "bg-blue-50 text-blue-700" : "bg-purple-50 text-purple-700"}`}>
             {ticket.type}
           </span>
+          {ticket.createdBy && (
+            <>
+              <span>•</span>
+              <span className="truncate">Par: {ticket.createdBy.prenom} {ticket.createdBy.nom}</span>
+            </>
+          )}
         </div>
 
         <div className="bg-slate-50 rounded-md p-3 mb-4">

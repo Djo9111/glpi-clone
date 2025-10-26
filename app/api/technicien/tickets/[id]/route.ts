@@ -1,3 +1,4 @@
+// app/api/technicien/tickets/[id]/route.ts
 import { NextResponse } from "next/server";
 import { PrismaClient, Statut } from "@prisma/client";
 import jwt from "jsonwebtoken";
@@ -10,8 +11,11 @@ const JWT_SECRET = process.env.JWT_SECRET || "secret123";
 function getTech(req: Request) {
   const token = req.headers.get("Authorization")?.replace("Bearer ", "");
   if (!token) return null;
-  try { return jwt.verify(token, JWT_SECRET) as { id: number; role: string }; }
-  catch { return null; }
+  try {
+    return jwt.verify(token, JWT_SECRET) as { id: number; role: string };
+  } catch {
+    return null;
+  }
 }
 
 // GET /api/technicien/tickets/[id]
@@ -20,8 +24,12 @@ export async function GET(
   ctx: { params: Promise<{ id: string }> }
 ) {
   const payload = getTech(req);
-  if (!payload) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
-  if (payload.role !== "TECHNICIEN") return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+  if (!payload) {
+    return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  }
+  if (payload.role !== "TECHNICIEN") {
+    return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+  }
 
   const { id } = await ctx.params;
   const ticketId = Number(id);
@@ -40,7 +48,9 @@ export async function GET(
     },
   });
 
-  if (!ticket) return NextResponse.json({ error: "Ticket introuvable" }, { status: 404 });
+  if (!ticket) {
+    return NextResponse.json({ error: "Ticket introuvable" }, { status: 404 });
+  }
   return NextResponse.json(ticket);
 }
 
@@ -50,8 +60,12 @@ export async function PATCH(
   ctx: { params: Promise<{ id: string }> }
 ) {
   const payload = getTech(req);
-  if (!payload) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
-  if (payload.role !== "TECHNICIEN") return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+  if (!payload) {
+    return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  }
+  if (payload.role !== "TECHNICIEN") {
+    return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+  }
 
   const { id } = await ctx.params;
   const ticketId = Number(id);
@@ -68,17 +82,25 @@ export async function PATCH(
   const current = await prisma.ticket.findFirst({
     where: { id: ticketId, assignedToId: payload.id },
   });
-  if (!current) return NextResponse.json({ error: "Ticket introuvable" }, { status: 404 });
+  if (!current) {
+    return NextResponse.json({ error: "Ticket introuvable" }, { status: 404 });
+  }
 
   const data: Record<string, any> = {};
   const now = new Date();
 
-  // --- logique statut générique (prise en charge / clôture) ---
-  if (body.statut === "IN_PROGRESS" && !current.prisEnChargeAt) {
-    data.prisEnChargeAt = now;
+  // --- logique statut générique ---
+  if (body.statut === "IN_PROGRESS") {
+    // poser le statut et init prisEnChargeAt si manquant
+    data.statut = Statut.IN_PROGRESS;
+    if (!current.prisEnChargeAt) {
+      data.prisEnChargeAt = now;
+    }
   }
 
   if (body.statut === "CLOSED" && current.statut !== Statut.CLOSED) {
+    // poser le statut et les métriques de clôture
+    data.statut = Statut.CLOSED;
     const start = current.prisEnChargeAt ?? current.dateCreation;
     const dureeTraitementMinutes = Math.max(
       0,
@@ -89,12 +111,16 @@ export async function PATCH(
   }
 
   // --- logique Mantice ---
-  const manticeNumeroFromBody = typeof body.manticeNumero === "string"
-    ? body.manticeNumero.trim()
-    : undefined;
+  const manticeNumeroFromBody =
+    typeof body.manticeNumero === "string"
+      ? body.manticeNumero.trim()
+      : undefined;
 
-  // 1) Transition vers TRANSFERE_MANTICE : exiger un numéro (soit fourni maintenant, soit déjà existant)
-  if (body.statut === "TRANSFERE_MANTICE" && current.statut !== Statut.TRANSFERE_MANTICE) {
+  // 1) Transition vers TRANSFERE_MANTICE : exiger un numéro
+  if (
+    body.statut === "TRANSFERE_MANTICE" &&
+    current.statut !== Statut.TRANSFERE_MANTICE
+  ) {
     const numeroEffectif = manticeNumeroFromBody ?? current.manticeNumero ?? null;
     if (!numeroEffectif) {
       return NextResponse.json(
@@ -102,23 +128,18 @@ export async function PATCH(
         { status: 400 }
       );
     }
-    data.statut = "TRANSFERE_MANTICE" as Statut;
+    data.statut = Statut.TRANSFERE_MANTICE;
     data.manticeNumero = numeroEffectif;
 
-    // Poser manticeAt si absent
     if (!current.manticeAt) {
       data.manticeAt = now;
     }
   }
 
   // 2) Mise à jour du numéro Mantice seule (sans changer de statut)
-  if (
-    manticeNumeroFromBody &&
-    manticeNumeroFromBody !== current.manticeNumero
-  ) {
+  if (manticeNumeroFromBody && manticeNumeroFromBody !== current.manticeNumero) {
     data.manticeNumero = manticeNumeroFromBody;
 
-    // Si le ticket est (ou devient) TRANSFERE_MANTICE et qu'on n'a pas de date → poser manticeAt
     const statutFinal = (data.statut as Statut) ?? current.statut;
     if (statutFinal === Statut.TRANSFERE_MANTICE && !current.manticeAt) {
       data.manticeAt = now;
@@ -135,8 +156,12 @@ export async function PATCH(
     data.statut = body.statut as Statut;
   }
 
+  // --- filet de sécurité : si un statut a été demandé mais pas encore appliqué ---
+  if (body.statut && !data.statut) {
+    data.statut = body.statut as Statut;
+  }
+
   if (Object.keys(data).length === 0) {
-    // rien à modifier
     return NextResponse.json({ message: "Aucune modification" });
   }
 

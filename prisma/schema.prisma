@@ -13,21 +13,12 @@ enum Role {
   CHEF_DSI
 }
 
-/// Niveau hiérarchique interne (distinct des rôles d’accès)
-enum Hierarchie {
-  EMPLOYE
-  RESPONSABLE_SERVICE
-  CHEF_SERVICE
-  DGA
-  DG
-}
-
 enum Statut {
   OPEN
   IN_PROGRESS
-  A_CLOTURER // nouveau
-  REJETE // nouveau
-  TRANSFERE_MANTICE // nouveau
+  A_CLOTURER
+  REJETE
+  TRANSFERE_MANTICE
   CLOSED
 }
 
@@ -56,26 +47,32 @@ model Utilisateur {
   departementId Int?
   departement   Departement? @relation(fields: [departementId], references: [id])
 
-  // déjà existants
+  /// Code hiérarchique : 0 = employé simple, 1+ = niveaux de supervision
+  /// Plus le code est élevé, plus le niveau hiérarchique est haut
+  codeHierarchique Int @default(0)
+
+  // Relations existantes
   tickets             Ticket[]       @relation("EmployeTickets")
   ticketsAssignes     Ticket[]       @relation("TechnicienTickets")
   notifications       Notification[]
   createdAt           DateTime       @default(now())
   commentairesRediges Commentaire[]  @relation("CommentaireAuteur")
 
-  // AJOUT côté opposé de la relation responsable
+  // Relation opposée responsable
   departementsResponsables Departement[] @relation("DepartementResponsable")
+
+  @@index([departementId, codeHierarchique])
 }
 
 model Application {
   id      Int      @id @default(autoincrement())
-  nom     String   @unique // ex: Word, Lotus, Delta, CDSNet, Kaspersky, etc.
+  nom     String   @unique
   tickets Ticket[]
 }
 
 model Materiel {
   id      Int      @id @default(autoincrement())
-  nom     String   @unique // ex: PC, Imprimante, Scanner, UC, etc.
+  nom     String   @unique
   tickets Ticket[]
 }
 
@@ -95,23 +92,18 @@ model Ticket {
   departementId Int?
   departement   Departement? @relation(fields: [departementId], references: [id])
 
-  /// Spécifique au type :
-  /// - si type = ASSISTANCE -> applicationId (facultatif mais recommandé)
   applicationId Int?
   application   Application? @relation(fields: [applicationId], references: [id])
 
-  /// - si type = INTERVENTION -> materielId (facultatif mais recommandé)
   materielId Int?
   materiel   Materiel? @relation(fields: [materielId], references: [id])
 
-  /// Suivi du temps (calculable)
-  prisEnChargeAt         DateTime? // quand le ticket passe en IN_PROGRESS
-  clotureAt              DateTime? // quand il passe en CLOSED
-  dureeTraitementMinutes Int? // snapshot à la clôture (ou MAJ périodique)
+  prisEnChargeAt         DateTime?
+  clotureAt              DateTime?
+  dureeTraitementMinutes Int?
 
-  /// Escalade MANTICE
-  manticeNumero String? // numéro MANTICE rattaché
-  manticeAt     DateTime? // date de transfert vers MANTICE
+  manticeNumero String?
+  manticeAt     DateTime?
 
   notifications Notification[]
   piecesJointes PieceJointe[]

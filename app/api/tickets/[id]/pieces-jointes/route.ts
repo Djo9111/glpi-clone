@@ -12,16 +12,73 @@ function getUserFromRequest(request: Request) {
   const token = request.headers.get("Authorization")?.replace("Bearer ", "");
   if (!token) return null;
   try {
-    return jwt.verify(token, JWT_SECRET) as { id: number; role: string };
+    return jwt.verify(token, JWT_SECRET) as {
+      id: number;
+      role: string;
+      codeHierarchique: number;
+      departementId: number | null;
+    };
   } catch {
     return null;
   }
 }
 
-// ⬇️ NOTE: params is async; await it before use
+/**
+ * Vérifier si l'utilisateur peut voir ce ticket
+ * - CHEF_DSI : voit tout
+ * - TECHNICIEN : ses tickets assignés + ses propres tickets
+ * - EMPLOYE : ses tickets + tickets de ses subordonnés (même département, code inférieur)
+ */
+async function canAccessTicket(
+  userId: number,
+  userRole: string,
+  userCode: number,
+  userDept: number | null,
+  ticketId: number
+) {
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: ticketId },
+    select: {
+      assignedToId: true,
+      createdById: true,
+      createdBy: {
+        select: {
+          departementId: true,
+          codeHierarchique: true,
+        },
+      },
+    },
+  });
+
+  if (!ticket) return false;
+
+  // CHEF_DSI voit tout
+  if (userRole === "CHEF_DSI") return true;
+
+  // TECHNICIEN : tickets assignés ou créés par lui
+  if (userRole === "TECHNICIEN") {
+    return userId === ticket.assignedToId || userId === ticket.createdById;
+  }
+
+  // EMPLOYE : ses tickets
+  if (userId === ticket.createdById) return true;
+
+  // Vérifier si c'est un subordonné (même département + code inférieur)
+  if (
+    userCode > 0 &&
+    userDept &&
+    ticket.createdBy.departementId === userDept &&
+    ticket.createdBy.codeHierarchique < userCode
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 export async function GET(
   req: Request,
-  ctx: { params: Promise<{ id: string }> } // 👈 make params a Promise
+  ctx: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = getUserFromRequest(req);
@@ -29,25 +86,20 @@ export async function GET(
       return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
     }
 
-    const { id } = await ctx.params; // 👈 await here
+    const { id } = await ctx.params;
     const ticketId = Number(id);
     if (!Number.isFinite(ticketId)) {
       return NextResponse.json({ error: "Paramètre invalide" }, { status: 400 });
     }
 
-    const t = await prisma.ticket.findUnique({
-      where: { id: ticketId },
-      select: { createdById: true, assignedToId: true },
-    });
-
-    if (!t) {
-      return NextResponse.json([]); // ticket inexistant -> pas d'erreur UI
-    }
-
-    const allowed =
-      auth.role === "CHEF_DSI" ||
-      auth.id === t.createdById ||
-      (t.assignedToId != null && auth.id === t.assignedToId);
+    // Vérifier l'accès avec la logique hiérarchique
+    const allowed = await canAccessTicket(
+      auth.id,
+      auth.role,
+      auth.codeHierarchique,
+      auth.departementId,
+      ticketId
+    );
 
     if (!allowed) {
       return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
@@ -64,6 +116,6 @@ export async function GET(
     );
   } catch (e) {
     console.error("Erreur GET pièces jointes:", e);
-    return NextResponse.json([]);
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
   }
 }

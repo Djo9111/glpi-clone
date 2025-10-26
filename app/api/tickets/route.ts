@@ -38,7 +38,14 @@ const MAX_ATTACH_TOTAL = 25 * 1024 * 1024;
 function getUserFromRequest(request: Request) {
   const token = request.headers.get("Authorization")?.replace("Bearer ", "");
   if (!token) return null;
-  try { return jwt.verify(token, JWT_SECRET) as { id: number; role: string }; }
+  try { 
+    return jwt.verify(token, JWT_SECRET) as { 
+      id: number; 
+      role: string;
+      codeHierarchique: number;
+      departementId: number | null;
+    }; 
+  }
   catch { return null; }
 }
 
@@ -154,6 +161,125 @@ async function sendNewTicketEmails(ticket: any, pieceUrls: string[] = []) {
 }
 
 /* ---------------------------------------------------------------------------------- */
+/* GET: récupérer les tickets visibles selon le cloisonnement hiérarchique            */
+/* ---------------------------------------------------------------------------------- */
+export async function GET(request: Request) {
+  try {
+    const payload = getUserFromRequest(request);
+    if (!payload) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+
+    const url = new URL(request.url);
+    const userId = url.searchParams.get("userId"); // pour voir les tickets d'un utilisateur spécifique
+
+    let tickets;
+
+    // CHEF_DSI voit TOUS les tickets
+    if (payload.role === "CHEF_DSI") {
+      const whereClause = userId ? { createdById: Number(userId) } : {};
+      tickets = await prisma.ticket.findMany({
+        where: whereClause,
+        include: {
+          createdBy: { select: { id: true, nom: true, prenom: true, email: true } },
+          assignedTo: { select: { id: true, nom: true, prenom: true } },
+          departement: { select: { id: true, nom: true } },
+          application: { select: { id: true, nom: true } },
+          materiel: { select: { id: true, nom: true } },
+        },
+        orderBy: { dateCreation: "desc" },
+      });
+    } 
+    // TECHNICIEN voit ses tickets assignés + ses propres tickets
+    else if (payload.role === "TECHNICIEN") {
+      tickets = await prisma.ticket.findMany({
+        where: {
+          OR: [
+            { assignedToId: payload.id },
+            { createdById: payload.id },
+          ],
+        },
+        include: {
+          createdBy: { select: { id: true, nom: true, prenom: true, email: true } },
+          assignedTo: { select: { id: true, nom: true, prenom: true } },
+          departement: { select: { id: true, nom: true } },
+          application: { select: { id: true, nom: true } },
+          materiel: { select: { id: true, nom: true } },
+        },
+        orderBy: { dateCreation: "desc" },
+      });
+    }
+    // EMPLOYE : voit ses tickets + tickets des subordonnés (même département, code < le sien)
+    else {
+      const conditions: any[] = [{ createdById: payload.id }];
+
+      // Si l'employé a un code > 0 et un département, il peut voir les tickets de ses subordonnés
+      if (payload.codeHierarchique > 0 && payload.departementId) {
+        // Récupérer les utilisateurs du même département avec un code inférieur
+        const subordonnés = await prisma.utilisateur.findMany({
+          where: {
+            departementId: payload.departementId,
+            codeHierarchique: { lt: payload.codeHierarchique },
+          },
+          select: { id: true },
+        });
+
+        if (subordonnés.length > 0) {
+          conditions.push({
+            createdById: { in: subordonnés.map(s => s.id) },
+          });
+        }
+      }
+
+      // Si userId est spécifié, vérifier que l'utilisateur a le droit de voir ses tickets
+      if (userId) {
+        const targetUserId = Number(userId);
+        const targetUser = await prisma.utilisateur.findUnique({
+          where: { id: targetUserId },
+          select: { departementId: true, codeHierarchique: true },
+        });
+
+        // Vérifier les droits de visibilité
+        if (targetUserId !== payload.id) {
+          if (!targetUser || 
+              targetUser.departementId !== payload.departementId ||
+              targetUser.codeHierarchique >= payload.codeHierarchique) {
+            return NextResponse.json({ error: "Accès refusé à ces tickets" }, { status: 403 });
+          }
+        }
+
+        tickets = await prisma.ticket.findMany({
+          where: { createdById: targetUserId },
+          include: {
+            createdBy: { select: { id: true, nom: true, prenom: true, email: true } },
+            assignedTo: { select: { id: true, nom: true, prenom: true } },
+            departement: { select: { id: true, nom: true } },
+            application: { select: { id: true, nom: true } },
+            materiel: { select: { id: true, nom: true } },
+          },
+          orderBy: { dateCreation: "desc" },
+        });
+      } else {
+        tickets = await prisma.ticket.findMany({
+          where: { OR: conditions },
+          include: {
+            createdBy: { select: { id: true, nom: true, prenom: true, email: true } },
+            assignedTo: { select: { id: true, nom: true, prenom: true } },
+            departement: { select: { id: true, nom: true } },
+            application: { select: { id: true, nom: true } },
+            materiel: { select: { id: true, nom: true } },
+          },
+          orderBy: { dateCreation: "desc" },
+        });
+      }
+    }
+
+    return NextResponse.json(tickets);
+  } catch (error) {
+    console.error("Erreur GET tickets:", error);
+    return NextResponse.json({ error: "Impossible de récupérer les tickets" }, { status: 500 });
+  }
+}
+
+/* ---------------------------------------------------------------------------------- */
 /* POST: création ticket (JSON ou multipart), avec applicationId / materielId          */
 /* ---------------------------------------------------------------------------------- */
 export async function POST(request: Request) {
@@ -256,7 +382,7 @@ export async function POST(request: Request) {
         matConnect = { materiel: { connect: { id: mat.id } } };
       }
 
-      // 1) créer le ticket d’abord
+      // 1) créer le ticket d'abord
       const ticket = await prisma.ticket.create({
         data: {
           description,
