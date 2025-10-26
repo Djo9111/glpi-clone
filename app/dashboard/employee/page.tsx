@@ -89,10 +89,10 @@ export default function EmployeeDashboard() {
   const router = useRouter();
 
   // —— Session / onglet ——
-  const [user, setUser] = useState<{ 
-    id: number; 
-    nom: string; 
-    prenom: string; 
+  const [user, setUser] = useState<{
+    id: number;
+    nom: string;
+    prenom: string;
     role: string;
     codeHierarchique: number;
     departementId: number | null;
@@ -214,7 +214,7 @@ export default function EmployeeDashboard() {
   const fetchSubordinates = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token || !user) return;
-    
+
     // Si l'utilisateur n'a pas de code hiérarchique > 0, pas de subordonnés
     if (user.codeHierarchique === 0 || !user.departementId) {
       setSubordinates([]);
@@ -253,7 +253,7 @@ export default function EmployeeDashboard() {
   const fetchSubordinateTickets = useCallback(async (userId: number) => {
     const token = localStorage.getItem("token");
     if (!token) return;
-    
+
     setLoadingSubTickets(true);
     try {
       const res = await fetch(`/api/tickets?userId=${userId}`, {
@@ -1116,9 +1116,8 @@ function TicketDrawer({
     ticket.statut === "IN_PROGRESS" ? 2 :
     ticket.assignedTo ? 1 : 0;
 
-  const steps = ["Créé", "Assigné", "En cours", "À clôturer", "Clôturé"];
-
-  const canClose = ticket.statut === "A_CLOTURER" && !!user && ticket.createdBy?.id === user.id;
+  // ✅ Afficher le bouton pour tout ticket A_CLOTURER (l’API vérifiera que le user est bien le créateur)
+  const canClose = ticket.statut === "A_CLOTURER";
 
   const handleAddComment = async () => {
     const token = localStorage.getItem("token");
@@ -1211,7 +1210,7 @@ function TicketDrawer({
                 onClick={handleCloseTicket}
                 disabled={closing}
                 className="rounded-md bg-emerald-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50"
-                title="Clôturer ce ticket (réservé au créateur)"
+                title="Clôturer ce ticket"
               >
                 {closing ? "Clôture…" : "Clôturer"}
               </button>
