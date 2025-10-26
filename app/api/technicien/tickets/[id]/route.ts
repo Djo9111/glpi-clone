@@ -18,6 +18,19 @@ function getTech(req: Request) {
   }
 }
 
+// Fonction helper pour les labels de statut
+function getStatusLabel(statut: Statut): string {
+  switch (statut) {
+    case "OPEN": return "Ouvert";
+    case "IN_PROGRESS": return "En cours";
+    case "A_CLOTURER": return "À clôturer";
+    case "REJETE": return "Rejeté";
+    case "TRANSFERE_MANTICE": return "Transféré MANTICE";
+    case "CLOSED": return "Clôturé";
+    default: return String(statut);
+  }
+}
+
 // GET /api/technicien/tickets/[id]
 export async function GET(
   req: Request,
@@ -78,9 +91,12 @@ export async function PATCH(
     manticeNumero?: string;
   };
 
-  // Ticket bien assigné à ce technicien ?
+  // Ticket bien assigné à ce technicien ? Avec les infos du créateur
   const current = await prisma.ticket.findFirst({
     where: { id: ticketId, assignedToId: payload.id },
+    include: {
+      createdBy: { select: { id: true, prenom: true, nom: true } },
+    },
   });
   if (!current) {
     return NextResponse.json({ error: "Ticket introuvable" }, { status: 404 });
@@ -88,6 +104,7 @@ export async function PATCH(
 
   const data: Record<string, any> = {};
   const now = new Date();
+  const notifications: Array<{ userId: number; message: string }> = [];
 
   // --- logique statut générique ---
   if (body.statut === "IN_PROGRESS") {
@@ -161,6 +178,24 @@ export async function PATCH(
     data.statut = body.statut as Statut;
   }
 
+  // Notification de changement de statut à l'employé créateur
+  if (body.statut && body.statut !== current.statut) {
+    const statusLabel = getStatusLabel(body.statut as Statut);
+    
+    // Message spécial pour la clôture
+    if (body.statut === "CLOSED") {
+      notifications.push({
+        userId: current.createdBy.id,
+        message: `Votre ticket #${ticketId} a été clôturé.`,
+      });
+    } else {
+      notifications.push({
+        userId: current.createdBy.id,
+        message: `Le statut de votre ticket #${ticketId} est passé à "${statusLabel}".`,
+      });
+    }
+  }
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ message: "Aucune modification" });
   }
@@ -176,6 +211,17 @@ export async function PATCH(
       departement: { select: { id: true, nom: true } },
     },
   });
+
+  // Créer toutes les notifications en batch
+  if (notifications.length > 0) {
+    await prisma.notification.createMany({
+      data: notifications.map(n => ({
+        userId: n.userId,
+        ticketId: updated.id,
+        message: n.message,
+      })),
+    });
+  }
 
   return NextResponse.json(updated);
 }

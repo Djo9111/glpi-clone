@@ -15,7 +15,7 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const [items, setItems] = useState<Notif[]>([]);
-  const [role, setRole] = useState<string | null>(null); // 👈 rôle depuis le JWT
+  const [role, setRole] = useState<string | null>(null);
   const timerRef = useRef<number | null>(null);
 
   const fetchNotifications = async () => {
@@ -41,7 +41,7 @@ export default function NotificationBell() {
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split(".")[1]));
-        setRole(payload.role ?? null); // 👈 rôle stocké
+        setRole(payload.role ?? null);
       } catch {}
     }
 
@@ -73,12 +73,14 @@ export default function NotificationBell() {
     }
   };
 
-  // 👇 Détermine le lien selon le rôle
-  const ticketHref = (id?: number) => {
-    if (!id) return "#";
+  // Détermine le lien selon le rôle
+  const getTicketLink = (id?: number) => {
+    if (!id) return null;
     if (role === "CHEF_DSI") return `/dashboard/admin-tickets/${id}`;
     if (role === "TECHNICIEN") return `/dashboard/technicien/${id}`;
-    return `/dashboard/employee`; // fallback par défaut
+    // Pour les employés, on redirige vers l'onglet "Mes tickets"
+    if (role === "EMPLOYE") return `/dashboard/employee?tab=tickets`;
+    return null;
   };
 
   return (
@@ -101,7 +103,7 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-[360px] max-h-[60vh] overflow-auto rounded-2xl border border-amber-200 bg-white shadow-lg">
+        <div className="absolute right-0 mt-2 w-[360px] max-h-[60vh] overflow-auto rounded-2xl border border-amber-200 bg-white shadow-lg z-50">
           <div className="flex items-center justify-between px-4 py-3 border-b border-amber-100">
             <span className="font-semibold">Boîte de réception</span>
             <button
@@ -116,34 +118,43 @@ export default function NotificationBell() {
             <div className="p-4 text-sm text-neutral-500">Aucune notification</div>
           ) : (
             <ul className="divide-y divide-amber-100">
-              {items.map(n => (
-                <li
-                  key={n.id}
-                  className={`px-4 py-3 ${
-                    n.isRead ? "bg-white" : "bg-amber-50/50"
-                  }`}
-                >
-                  <div className="flex justify-between items-start gap-3">
-                    <div className="flex-1">
-                      <p className="text-sm text-neutral-800">{n.message}</p>
-                      <p className="mt-1 text-xs text-neutral-500">
-                        {new Date(n.dateEnvoi).toLocaleString()}
-                      </p>
-                      <div className="mt-2">
-                        <Link
-                          href={ticketHref(n.ticket?.id)} // 👈 lien dynamique
-                          className="text-xs text-amber-700 hover:underline"
-                        >
-                          Ouvrir le ticket #{n.ticket?.id}
-                        </Link>
+              {items.map(n => {
+                const ticketLink = getTicketLink(n.ticket?.id);
+                
+                return (
+                  <li
+                    key={n.id}
+                    className={`px-4 py-3 ${
+                      n.isRead ? "bg-white" : "bg-amber-50/50"
+                    }`}
+                  >
+                    <div className="flex justify-between items-start gap-3">
+                      <div className="flex-1">
+                        <p className="text-sm text-neutral-800">{n.message}</p>
+                        <p className="mt-1 text-xs text-neutral-500">
+                          {new Date(n.dateEnvoi).toLocaleString()}
+                        </p>
+                        
+                        {/* Affichage du lien uniquement pour Admin et Technicien */}
+                        {ticketLink && role !== "EMPLOYE" && (
+                          <div className="mt-2">
+                            <Link
+                              href={ticketLink}
+                              className="text-xs text-amber-700 hover:underline"
+                              onClick={() => setOpen(false)}
+                            >
+                              Ouvrir le ticket #{n.ticket?.id}
+                            </Link>
+                          </div>
+                        )}
                       </div>
+                      {!n.isRead && (
+                        <span className="mt-1 h-2 w-2 rounded-full bg-amber-500" />
+                      )}
                     </div>
-                    {!n.isRead && (
-                      <span className="mt-1 h-2 w-2 rounded-full bg-amber-500" />
-                    )}
-                  </div>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

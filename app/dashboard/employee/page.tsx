@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import NotificationBell from "@/app/components/NotificationBell";
 
 type TicketForm = {
   description: string;
@@ -49,7 +50,7 @@ function normalizeStatus(s: unknown): TicketStatut {
 
   if (k === "open") return "OPEN";
   if (k === "in_progress" || k === "in-progress") return "IN_PROGRESS";
-  if (k === "a_cloturer" || k === "a-cloturer" || k === "à_clôturer" || k === "à-cloturer") return "A_CLOTURER";
+  if (k === "a_cloturer" || k === "a-cloturer" || k === "à_clôturer" || k === "à-clôturer") return "A_CLOTURER";
   if (k === "closed" || k === "close") return "CLOSED";
 
   if (k === "en_attente" || k === "en-attente" || k === "attente" || k === "nouveau") return "OPEN";
@@ -445,12 +446,15 @@ export default function EmployeeDashboard() {
               </p>
             </div>
           </div>
-          <button
-            onClick={handleLogout}
-            className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs md:text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
-          >
-            Déconnexion
-          </button>
+          <div className="flex items-center gap-3">
+            <NotificationBell />
+            <button
+              onClick={handleLogout}
+              className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs md:text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
+            >
+              Déconnexion
+            </button>
+          </div>
         </div>
 
         {/* Onglets compacts */}

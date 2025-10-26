@@ -15,6 +15,19 @@ function getUser(request: Request) {
   catch { return null; }
 }
 
+// Fonction helper pour les labels de statut
+function getStatusLabel(statut: Statut): string {
+  switch (statut) {
+    case "OPEN": return "Ouvert";
+    case "IN_PROGRESS": return "En cours";
+    case "A_CLOTURER": return "À clôturer";
+    case "REJETE": return "Rejeté";
+    case "TRANSFERE_MANTICE": return "Transféré MANTICE";
+    case "CLOSED": return "Clôturé";
+    default: return String(statut);
+  }
+}
+
 // GET /api/admin/tickets/[id]
 export async function GET(
   _req: Request,
@@ -66,22 +79,50 @@ export async function PATCH(
   };
 
   try {
-    // Lire l'état actuel pour calculs
-    const current = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    // Lire l'état actuel pour calculs et notifications
+    const current = await prisma.ticket.findUnique({ 
+      where: { id: ticketId },
+      include: {
+        createdBy: { select: { id: true, prenom: true, nom: true } },
+        assignedTo: { select: { id: true, prenom: true, nom: true } },
+      }
+    });
     if (!current) return NextResponse.json({ error: "Ticket introuvable" }, { status: 404 });
 
     const data: any = {};
     const now = new Date();
+    const notifications: Array<{ userId: number; message: string }> = [];
 
     // Gestion assignation/désassignation
     if (typeof body.assignedToId !== "undefined") {
       data.assignedTo = body.assignedToId
         ? { connect: { id: body.assignedToId } }
         : { disconnect: true };
+
+      // Notification au technicien assigné
+      if (body.assignedToId) {
+        notifications.push({
+          userId: body.assignedToId,
+          message: `Ticket #${ticketId} vous a été assigné.`,
+        });
+
+        // Notification à l'employé créateur
+        const technicien = await prisma.utilisateur.findUnique({
+          where: { id: body.assignedToId },
+          select: { prenom: true, nom: true }
+        });
+        
+        if (technicien && current.createdBy.id !== body.assignedToId) {
+          notifications.push({
+            userId: current.createdBy.id,
+            message: `Votre ticket #${ticketId} a été assigné à ${technicien.prenom} ${technicien.nom}.`,
+          });
+        }
+      }
     }
 
     // Transitions de statut
-    if (body.statut) {
+    if (body.statut && body.statut !== current.statut) {
       data.statut = body.statut as Statut;
 
       // (1) Passage à IN_PROGRESS → initialiser prisEnChargeAt si manquant
@@ -99,8 +140,25 @@ export async function PATCH(
         data.clotureAt = now;
         data.dureeTraitementMinutes = dureeTraitementMinutes;
       }
+
+      // Notification de changement de statut à l'employé créateur
+      const statusLabel = getStatusLabel(body.statut as Statut);
+      notifications.push({
+        userId: current.createdBy.id,
+        message: `Le statut de votre ticket #${ticketId} est passé à "${statusLabel}".`,
+      });
+
+      // Notification spéciale si le ticket est clôturé
+      if (body.statut === "CLOSED") {
+        // On remplace la notification générique par une plus spécifique pour la clôture
+        const lastNotif = notifications[notifications.length - 1];
+        if (lastNotif && lastNotif.userId === current.createdBy.id) {
+          lastNotif.message = `Votre ticket #${ticketId} a été clôturé.`;
+        }
+      }
     }
 
+    // Mise à jour du ticket
     const updated = await prisma.ticket.update({
       where: { id: ticketId },
       data,
@@ -113,14 +171,14 @@ export async function PATCH(
       },
     });
 
-    // Notification d’assignation si besoin
-    if (body.assignedToId) {
-      await prisma.notification.create({
-        data: {
-          userId: body.assignedToId,
+    // Créer toutes les notifications en batch
+    if (notifications.length > 0) {
+      await prisma.notification.createMany({
+        data: notifications.map(n => ({
+          userId: n.userId,
           ticketId: updated.id,
-          message: `Ticket #${updated.id} vous a été assigné.`,
-        },
+          message: n.message,
+        })),
       });
     }
 
