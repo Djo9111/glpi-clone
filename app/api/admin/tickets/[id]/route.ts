@@ -76,6 +76,7 @@ export async function PATCH(
   const body = await req.json() as {
     assignedToId?: number | null;
     statut?: "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "REJETE" | "TRANSFERE_MANTICE" | "CLOSED";
+    manticeNumero?: string;
   };
 
   try {
@@ -141,20 +142,61 @@ export async function PATCH(
         data.dureeTraitementMinutes = dureeTraitementMinutes;
       }
 
+      // (3) Passage à TRANSFERE_MANTICE → enregistrer manticeAt et numéro si fourni
+      if (body.statut === "TRANSFERE_MANTICE" && current.statut !== Statut.TRANSFERE_MANTICE) {
+        if (!current.manticeAt) {
+          data.manticeAt = now;
+        }
+        // Si un numéro MANTICE est fourni, l'enregistrer
+        if (body.manticeNumero) {
+          data.manticeNumero = body.manticeNumero.trim();
+        }
+      }
+
       // Notification de changement de statut à l'employé créateur
       const statusLabel = getStatusLabel(body.statut as Statut);
-      notifications.push({
-        userId: current.createdBy.id,
-        message: `Le statut de votre ticket #${ticketId} est passé à "${statusLabel}".`,
-      });
-
-      // Notification spéciale si le ticket est clôturé
+      
+      // Message spécial si le ticket est clôturé
       if (body.statut === "CLOSED") {
-        // On remplace la notification générique par une plus spécifique pour la clôture
-        const lastNotif = notifications[notifications.length - 1];
-        if (lastNotif && lastNotif.userId === current.createdBy.id) {
-          lastNotif.message = `Votre ticket #${ticketId} a été clôturé.`;
+        notifications.push({
+          userId: current.createdBy.id,
+          message: `Votre ticket #${ticketId} a été clôturé.`,
+        });
+      } 
+      // Message spécial si transféré à MANTICE avec numéro
+      else if (body.statut === "TRANSFERE_MANTICE") {
+        const manticeNum = body.manticeNumero?.trim() || current.manticeNumero;
+        if (manticeNum) {
+          notifications.push({
+            userId: current.createdBy.id,
+            message: `Votre ticket #${ticketId} a été transféré à MANTICE (N° ${manticeNum}).`,
+          });
+        } else {
+          notifications.push({
+            userId: current.createdBy.id,
+            message: `Votre ticket #${ticketId} a été transféré à MANTICE.`,
+          });
         }
+      } 
+      // Message générique pour les autres changements
+      else {
+        notifications.push({
+          userId: current.createdBy.id,
+          message: `Le statut de votre ticket #${ticketId} est passé à "${statusLabel}".`,
+        });
+      }
+    }
+
+    // Mise à jour du numéro MANTICE seul (sans changement de statut)
+    if (body.manticeNumero && body.manticeNumero.trim() !== current.manticeNumero && !body.statut) {
+      data.manticeNumero = body.manticeNumero.trim();
+      
+      // Si le ticket est déjà en TRANSFERE_MANTICE, notifier l'employé du numéro
+      if (current.statut === Statut.TRANSFERE_MANTICE) {
+        notifications.push({
+          userId: current.createdBy.id,
+          message: `Le numéro MANTICE de votre ticket #${ticketId} est : ${data.manticeNumero}.`,
+        });
       }
     }
 
