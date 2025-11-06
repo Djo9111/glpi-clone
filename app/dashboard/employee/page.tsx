@@ -44,6 +44,8 @@ type CommentItem = {
 type Application = { id: number; nom: string };
 type Materiel = { id: number; nom: string };
 
+const MAX_FILES = 5;
+
 function normalizeStatus(s: unknown): TicketStatut {
   if (typeof s !== "string") return "OPEN";
   const k = s.trim().toLowerCase();
@@ -107,6 +109,7 @@ export default function EmployeeDashboard() {
     materielId: "",
   });
   const [files, setFiles] = useState<File[]>([]);
+  const [filesError, setFilesError] = useState<string>("");
 
   // —— Données ——
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -115,7 +118,7 @@ export default function EmployeeDashboard() {
   const [materiels, setMateriels] = useState<Materiel[]>([]);
   const [loadingCats, setLoadingCats] = useState(false);
 
-  // —— Subordonnés (nouveau) ——
+  // —— Subordonnés ——
   const [subordinates, setSubordinates] = useState<SubordinateUser[]>([]);
   const [loadingSubordinates, setLoadingSubordinates] = useState(false);
   const [selectedSubordinate, setSelectedSubordinate] = useState<SubordinateUser | null>(null);
@@ -302,13 +305,26 @@ export default function EmployeeDashboard() {
 
   const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const list = Array.from(e.target.files || []);
-    setFiles(list.slice(0, 5));
+    if (list.length > MAX_FILES) {
+      setFiles([]);
+      setFilesError(`Vous avez sélectionné ${list.length} fichiers : maximum ${MAX_FILES} autorisés.`);
+    } else {
+      setFiles(list);
+      setFilesError("");
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const token = localStorage.getItem("token");
     if (!token) return;
+
+    // Double garde côté client
+    if (files.length > MAX_FILES) {
+      setFilesError(`Vous avez sélectionné ${files.length} fichiers : maximum ${MAX_FILES} autorisés.`);
+      alert(`Erreur : maximum ${MAX_FILES} fichiers autorisés`);
+      return;
+    }
 
     try {
       const fd = new FormData();
@@ -339,6 +355,7 @@ export default function EmployeeDashboard() {
       alert("Votre demande a été envoyée avec succès !");
       setTicketForm({ description: "", typeTicket: "ASSISTANCE", applicationId: "", materielId: "" });
       setFiles([]);
+      setFilesError("");
       const fi = document.getElementById("fileInput") as HTMLInputElement | null;
       if (fi) fi.value = "";
 
@@ -615,7 +632,14 @@ export default function EmployeeDashboard() {
                   className="border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none rounded-md px-3 py-2 text-sm bg-white"
                   accept=".pdf,.png,.jpg,.jpeg,.txt,.log,.doc,.docx,.xlsx,.csv"
                 />
-                {files.length > 0 && (
+
+                {filesError && (
+                  <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md p-2">
+                    {filesError}
+                  </div>
+                )}
+
+                {files.length > 0 && !filesError && (
                   <ul className="mt-1 text-xs text-slate-600 space-y-1 bg-slate-50 rounded-md p-2">
                     {files.map((f, i) => (
                       <li key={i} className="flex items-center gap-2">
@@ -627,14 +651,15 @@ export default function EmployeeDashboard() {
                     ))}
                   </ul>
                 )}
-                <p className="text-[11px] text-slate-500">Formats : PDF, images, Office, TXT/LOG • Max 10 Mo par fichier, 5 fichiers</p>
+                <p className="text-[11px] text-slate-500">Formats : PDF, images, Office, TXT/LOG • Max 10 Mo par fichier, {MAX_FILES} fichiers</p>
               </div>
 
               <div className="mt-4">
                 <button
                   type="button"
                   onClick={handleSubmit}
-                  className="inline-flex items-center justify-center gap-2 rounded-md bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:from-orange-600 hover:to-orange-700"
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:from-orange-600 hover:to-orange-700 disabled:opacity-50"
+                  disabled={!!filesError}
                 >
                   Envoyer la demande
                 </button>
@@ -909,21 +934,6 @@ export default function EmployeeDashboard() {
                           <option value="A_CLOTURER">À clôturer</option>
                           <option value="CLOSED">Clôturés</option>
                         </select>
-
-                        <div className="flex items-center gap-1">
-                          <span className="text-[11px] text-slate-500">Afficher</span>
-                          <select
-                            value={subPageSize}
-                            onChange={(e) => setSubPageSize(Number(e.target.value) as 5 | 10 | 20 | 50)}
-                            className="h-9 rounded-md border border-slate-300 px-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-100"
-                          >
-                            <option value={5}>5</option>
-                            <option value={10}>10</option>
-                            <option value={20}>20</option>
-                            <option value={50}>50</option>
-                          </select>
-                          <span className="text-[11px] text-slate-500">par page</span>
-                        </div>
 
                         <button
                           onClick={() => selectedSubordinate && fetchSubordinateTickets(selectedSubordinate.id)}

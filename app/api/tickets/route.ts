@@ -211,9 +211,8 @@ export async function GET(request: Request) {
     else {
       const conditions: any[] = [{ createdById: payload.id }];
 
-      // Si l'employé a un code > 0 et un département, il peut voir les tickets de ses subordonnés
+      // Subordonnés visibles
       if (payload.codeHierarchique > 0 && payload.departementId) {
-        // Récupérer les utilisateurs du même département avec un code inférieur
         const subordonnés = await prisma.utilisateur.findMany({
           where: {
             departementId: payload.departementId,
@@ -229,7 +228,6 @@ export async function GET(request: Request) {
         }
       }
 
-      // Si userId est spécifié, vérifier que l'utilisateur a le droit de voir ses tickets
       if (userId) {
         const targetUserId = Number(userId);
         const targetUser = await prisma.utilisateur.findUnique({
@@ -237,7 +235,7 @@ export async function GET(request: Request) {
           select: { departementId: true, codeHierarchique: true },
         });
 
-        // Vérifier les droits de visibilité
+        // droits de visibilité
         if (targetUserId !== payload.id) {
           if (!targetUser || 
               targetUser.departementId !== payload.departementId ||
@@ -280,7 +278,7 @@ export async function GET(request: Request) {
 }
 
 /* ---------------------------------------------------------------------------------- */
-/* POST: création ticket (JSON ou multipart), avec applicationId / materielId          */
+/* POST: création ticket (JSON ou multipart), avec applicationId / materielId         */
 /* ---------------------------------------------------------------------------------- */
 export async function POST(request: Request) {
   try {
@@ -290,7 +288,7 @@ export async function POST(request: Request) {
 
     const ct = request.headers.get("content-type") || "";
 
-    // ------- CAS 1 : JSON -------
+    // ------- CAS 1 : JSON (sans PJ) -------
     if (ct.includes("application/json")) {
       const body = await request.json();
       const description = (body?.description ?? "").toString().trim();
@@ -302,7 +300,6 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Champs requis manquants" }, { status: 400 });
       }
 
-      // validation douce: si un id est fourni, il doit exister et coller au type
       let appConnect: { application: { connect: { id: number } } } | {} = {};
       let matConnect: { materiel: { connect: { id: number } } } | {} = {};
 
@@ -351,13 +348,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "Ticket créé", ticket }, { status: 201 });
     }
 
-    // ------- CAS 2 : multipart/form-data -------
+    // ------- CAS 2 : multipart/form-data (avec PJ) -------
     if (ct.includes("multipart/form-data")) {
       const form = await request.formData();
       const description = String(form.get("description") || "").trim();
       const typeTicket = form.get("typeTicket") as "ASSISTANCE" | "INTERVENTION" | null;
 
-      // ids éventuels
       const applicationIdRaw = form.get("applicationId");
       const materielIdRaw = form.get("materielId");
       const applicationId = applicationIdRaw != null ? Number(applicationIdRaw) : undefined;
@@ -367,7 +363,16 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Champs requis manquants" }, { status: 400 });
       }
 
-      // validation douce: si fourni, vérifier existence
+      // ——— VALIDATIONS AVANT CREATION DU TICKET ———
+      const files = form.getAll("files") as unknown as File[];
+      if (files && files.length > MAX_FILES) {
+        return NextResponse.json(
+          { error: `Vous avez joint ${files.length} fichiers : maximum ${MAX_FILES} autorisés.` },
+          { status: 400 }
+        );
+      }
+
+      // Valider existence des entités si fournis
       let appConnect: { application: { connect: { id: number } } } | {} = {};
       let matConnect: { materiel: { connect: { id: number } } } | {} = {};
 
@@ -382,7 +387,25 @@ export async function POST(request: Request) {
         matConnect = { materiel: { connect: { id: mat.id } } };
       }
 
-      // 1) créer le ticket d'abord
+      // Valider chaque fichier (taille + extension) avant création
+      if (files && files.length) {
+        for (const f of files) {
+          const ab = await f.arrayBuffer();
+          const buf = Buffer.from(ab);
+
+          if (buf.length > MAX_SIZE) {
+            return NextResponse.json({ error: `Fichier trop volumineux (> 10 Mo): ${f.name}` }, { status: 400 });
+          }
+
+          const original = f.name || "fichier";
+          const ext = (path.extname(original).replace(".", "").toLowerCase()) || "";
+          if (!ALLOWED_EXT.has(ext)) {
+            return NextResponse.json({ error: `Extension non autorisée: ${original}` }, { status: 400 });
+          }
+        }
+      }
+
+      // ——— CREATION DU TICKET APRES VALIDATION ———
       const ticket = await prisma.ticket.create({
         data: {
           description,
@@ -399,16 +422,11 @@ export async function POST(request: Request) {
         },
       });
 
-      // 2) gérer les fichiers
-      const files = form.getAll("files") as unknown as File[];
+      // ——— ECRITURE PHYSIQUE DES FICHIERS + LIGNES BDD ———
       let createdCount = 0;
       let pieceUrls: string[] = [];
 
       if (files && files.length) {
-        if (files.length > MAX_FILES) {
-          return NextResponse.json({ error: `Maximum ${MAX_FILES} fichiers autorisés` }, { status: 400 });
-        }
-
         const baseDir = path.join(process.cwd(), "public", "uploads", "tickets", String(ticket.id));
         await fs.mkdir(baseDir, { recursive: true });
 
@@ -418,16 +436,7 @@ export async function POST(request: Request) {
           const ab = await f.arrayBuffer();
           const buf = Buffer.from(ab);
 
-          if (buf.length > MAX_SIZE) {
-            return NextResponse.json({ error: `Fichier trop volumineux (> 10 Mo): ${f.name}` }, { status: 400 });
-          }
-
           const original = f.name || "fichier";
-          const ext = (path.extname(original).replace(".", "").toLowerCase()) || "";
-          if (!ALLOWED_EXT.has(ext)) {
-            return NextResponse.json({ error: `Extension non autorisée: ${original}` }, { status: 400 });
-          }
-
           const filename = `${Date.now()}_${slugify(original)}`;
           const fullPath = path.join(baseDir, filename);
           await fs.writeFile(fullPath, buf);
@@ -443,7 +452,7 @@ export async function POST(request: Request) {
         }
       }
 
-      // 3) notifs chefs DSI
+      // ——— Notifs + Email ———
       const admins = await prisma.utilisateur.findMany({ where: { role: "CHEF_DSI" }, select: { id: true } });
       if (admins.length) {
         const message =
@@ -456,7 +465,6 @@ export async function POST(request: Request) {
         });
       }
 
-      // 4) email avec PJ
       sendNewTicketEmails(ticket, pieceUrls).catch(e => console.error("Email CHEF_DSI non envoyé:", e));
 
       return NextResponse.json({
