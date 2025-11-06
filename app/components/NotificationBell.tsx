@@ -51,7 +51,49 @@ export default function NotificationBell() {
       if (timerRef.current) window.clearInterval(timerRef.current);
     };
   }, []);
+// remplacer useEffect par pour diminuer les logs
+/*
+useEffect(() => {
+  const token = localStorage.getItem("token");
+  if (!token) return;
 
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    setRole(payload.role ?? null);
+  } catch {
+    return; // Si token invalide, on arrête
+  }
+
+  let mounted = true;
+
+  const fetchWithValidation = async () => {
+    if (!mounted) return;
+    
+    const currentToken = localStorage.getItem("token");
+    if (!currentToken) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      return;
+    }
+
+    try {
+      await fetchNotifications();
+    } catch (error) {
+      console.error('Erreur fetch notifications:', error);
+    }
+  };
+
+  // Premier appel immédiat
+  fetchWithValidation();
+
+  // Polling toutes les 60 secondes au lieu de 12
+  timerRef.current = window.setInterval(fetchWithValidation, 60000);
+
+  return () => {
+    mounted = false;
+    if (timerRef.current) window.clearInterval(timerRef.current);
+  };
+}, []);
+*/
   const markAllRead = async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
