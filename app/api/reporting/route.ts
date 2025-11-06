@@ -14,6 +14,14 @@ function getUser(request: Request) {
 
 function startOfDay(d: Date) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
 function addDays(d: Date, n: number) { const x = new Date(d); x.setDate(x.getDate()+n); return x; }
+function startOfWeek(d: Date) { 
+  const x = new Date(d); 
+  const day = x.getDay();
+  const diff = x.getDate() - day + (day === 0 ? -6 : 1);
+  x.setDate(diff);
+  x.setHours(0,0,0,0);
+  return x;
+}
 
 export async function GET(request: Request) {
   const payload = getUser(request);
@@ -22,9 +30,9 @@ export async function GET(request: Request) {
 
   try {
     const url = new URL(request.url);
-    const days = Math.max(1, Math.min(365, Number(url.searchParams.get("days") ?? 30))); // default 30j
+    const days = Math.max(1, Math.min(365, Number(url.searchParams.get("days") ?? 30)));
 
-    // 1) Comptes par user (créateurs) => agrégation par département
+    // 1) Comptes par user (créateurs) => TOP 5 utilisateurs
     const perUserCounts = await prisma.ticket.groupBy({
       by: ["createdById"],
       _count: { _all: true },
@@ -35,6 +43,20 @@ export async function GET(request: Request) {
       select: { id: true, prenom: true, nom: true, departementId: true, departement: { select: { id: true, nom: true } } },
     });
 
+    // TOP 5 Utilisateurs
+    const topUsers = perUserCounts
+      .map(u => {
+        const user = users.find(x => x.id === u.createdById);
+        return {
+          id: u.createdById,
+          nomComplet: user ? `${user.prenom} ${user.nom}` : `#${u.createdById}`,
+          count: u._count._all
+        };
+      })
+      .sort((a,b) => b.count - a.count)
+      .slice(0, 5);
+
+    // Agrégation par département => TOP 5 départements
     const depAgg = new Map<number | "NA", { id: number | "NA"; nom: string; count: number }>();
     for (const u of users) {
       const count = perUserCounts.find(x => x.createdById === u.id)!._count._all;
@@ -44,9 +66,12 @@ export async function GET(request: Request) {
       if (prev) prev.count += count;
       else depAgg.set(depKey, { id: depKey, nom: depName, count });
     }
-    const topDepartment = [...depAgg.values()].sort((a,b)=>b.count-a.count)[0] ?? null;
+    const topDepartments = [...depAgg.values()]
+      .sort((a,b) => b.count - a.count)
+      .slice(0, 5);
+    const topDepartment = topDepartments[0] ?? null;
 
-    // 2) Temps moyen de traitement (minutes)
+    // 2) Temps moyen de traitement
     const closedDurations = await prisma.ticket.findMany({
       where: { statut: "CLOSED", OR: [{ dureeTraitementMinutes: { not: null } }, { AND: [{ prisEnChargeAt: { not: null } }, { clotureAt: { not: null } }] }] },
       select: { dureeTraitementMinutes: true, prisEnChargeAt: true, clotureAt: true },
@@ -61,23 +86,20 @@ export async function GET(request: Request) {
     }).filter((x): x is number => x !== null);
     const avgResolutionMinutes = durations.length ? Math.round(durations.reduce((a,b)=>a+b,0)/durations.length) : 0;
 
-    // 3) Application la plus problématique
+    // 3) TOP 5 Applications
     const perApp = await prisma.ticket.groupBy({ by: ["applicationId"], _count: { _all: true } });
     const appIds = perApp.filter(a=>a.applicationId != null).map(a=>a.applicationId!) as number[];
     const apps = appIds.length ? await prisma.application.findMany({ where: { id: { in: appIds } }, select: { id: true, nom: true } }) : [];
     const appMap = new Map(apps.map(a => [a.id, a.nom]));
-    const topApplication = perApp
+    const topApplications = perApp
       .filter(a => a.applicationId != null)
       .map(a => ({ id: a.applicationId!, nom: appMap.get(a.applicationId!) ?? "(inconnu)", count: a._count._all }))
-      .sort((a,b)=>b.count-a.count)[0] ?? null;
+      .sort((a,b) => b.count - a.count)
+      .slice(0, 5);
+    const topApplication = topApplications[0] ?? null;
 
-    // 4) Utilisateur qui crée le plus de tickets
-    const topUserRaw = perUserCounts.sort((a,b)=>b._count._all - a._count._all)[0] ?? null;
-    let topUser: null | { id: number; nomComplet: string; count: number } = null;
-    if (topUserRaw) {
-      const u = users.find(x => x.id === topUserRaw.createdById);
-      topUser = { id: topUserRaw.createdById, nomComplet: u ? `${u.prenom} ${u.nom}` : `#${topUserRaw.createdById}`, count: topUserRaw._count._all };
-    }
+    // 4) Utilisateur top (pour compatibilité)
+    const topUser = topUsers[0] ?? null;
 
     // 5) Stats par statut
     const byStatus = await prisma.ticket.groupBy({ by: ["statut"], _count: { _all: true } });
@@ -86,7 +108,7 @@ export async function GET(request: Request) {
       count: byStatus.find(x => x.statut === s)?._count._all ?? 0
     }));
 
-    // 6) Tendance (derniers N jours)
+    // 6) Tendance journalière
     const since = addDays(startOfDay(new Date()), -days + 1);
     const recent = await prisma.ticket.findMany({
       where: { dateCreation: { gte: since } },
@@ -105,25 +127,43 @@ export async function GET(request: Request) {
       if (row) row.count++;
     });
 
-    // 7) Top matériel (optionnel)
+    // 7) Tendance hebdomadaire
+    const weeklyMap = new Map<string, number>();
+    recent.forEach(t => {
+      const weekStart = startOfWeek(new Date(t.dateCreation));
+      const key = weekStart.toISOString().slice(0,10);
+      weeklyMap.set(key, (weeklyMap.get(key) || 0) + 1);
+    });
+    const seriesWeekly = Array.from(weeklyMap.entries())
+      .map(([date, count]) => ({ date, count }))
+      .sort((a,b) => a.date.localeCompare(b.date));
+
+    // 8) TOP 5 Matériels
     const perMat = await prisma.ticket.groupBy({ by: ["materielId"], _count: { _all: true } });
     const matIds = perMat.filter(m=>m.materielId!=null).map(m=>m.materielId!) as number[];
     const mats = matIds.length ? await prisma.materiel.findMany({ where: { id: { in: matIds } }, select: { id: true, nom: true } }) : [];
     const matMap = new Map(mats.map(m => [m.id, m.nom]));
-    const topMateriel = perMat
+    const topMateriels = perMat
       .filter(m => m.materielId != null)
       .map(m => ({ id: m.materielId!, nom: matMap.get(m.materielId!) ?? "(inconnu)", count: m._count._all }))
-      .sort((a,b)=>b.count-a.count)[0] ?? null;
+      .sort((a,b) => b.count - a.count)
+      .slice(0, 5);
+    const topMateriel = topMateriels[0] ?? null;
 
     return NextResponse.json({
       rangeDays: days,
-      topDepartment,            // { id | "NA", nom, count } | null
-      avgResolutionMinutes,     // number
-      topApplication,           // { id, nom, count } | null
-      topUser,                  // { id, nomComplet, count } | null
-      topMateriel,              // { id, nom, count } | null
-      statuses,                 // [{ statut, count }]
-      seriesDailyTickets: series, // [{ date: 'YYYY-MM-DD', count }]
+      topDepartment,
+      topDepartments,
+      avgResolutionMinutes,
+      topApplication,
+      topApplications,
+      topUser,
+      topUsers,
+      topMateriel,
+      topMateriels,
+      statuses,
+      seriesDailyTickets: series,
+      seriesWeeklyTickets: seriesWeekly,
     });
   } catch (e) {
     console.error("GET /api/reporting:", e);
