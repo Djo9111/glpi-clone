@@ -12,8 +12,7 @@ type TicketForm = {
   materielId?: number | "";
 };
 
-type TicketStatut = "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "CLOSED";
-
+type TicketStatut = "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "CLOSED" | "TRANSFERE_MANTICE";
 type Ticket = {
   id: number;
   description: string;
@@ -54,7 +53,11 @@ function normalizeStatus(s: unknown): TicketStatut {
   if (k === "in_progress" || k === "in-progress") return "IN_PROGRESS";
   if (k === "a_cloturer" || k === "a-cloturer" || k === "à_clôturer" || k === "à-clôturer") return "A_CLOTURER";
   if (k === "closed" || k === "close") return "CLOSED";
+  
+  // AJOUT : Gestion du statut TRANSFERE_MANTICE
+  if (k === "transfere_mantice" || k === "transfere" || k === "transféré" || k === "transféré_mantice") return "TRANSFERE_MANTICE";
 
+  // Traitement des autres formats
   if (k === "en_attente" || k === "en-attente" || k === "attente" || k === "nouveau") return "OPEN";
   if (k === "en_cours" || k === "en-cours" || k === "traitement") return "IN_PROGRESS";
   if (k === "resolu" || k === "résolu") return "A_CLOTURER";
@@ -1045,6 +1048,7 @@ function StatusChip({ statut }: { statut: TicketStatut }) {
     IN_PROGRESS: { label: "En cours", cls: "bg-blue-50 text-blue-700 border-blue-300", icon: "" },
     A_CLOTURER: { label: "À clôturer", cls: "bg-violet-50 text-violet-700 border-violet-300", icon: "" },
     CLOSED: { label: "Clôturé", cls: "bg-emerald-50 text-emerald-700 border-emerald-300", icon: "" },
+    TRANSFERE_MANTICE: { label: "Transféré à Mantice", cls: "bg-orange-50 text-orange-700 border-orange-300", icon: "" }, // AJOUT
   } as const;
   const s = map[statut];
   return (
@@ -1120,11 +1124,12 @@ function TicketDrawer({
 
   if (!ticket) return null;
 
-  const stepIndex =
-    ticket.statut === "CLOSED" ? 4 :
-    ticket.statut === "A_CLOTURER" ? 3 :
-    ticket.statut === "IN_PROGRESS" ? 2 :
-    ticket.assignedTo ? 1 : 0;
+const stepIndex =
+  ticket.statut === "CLOSED" ? 4 :
+  ticket.statut === "A_CLOTURER" ? 3 :
+  ticket.statut === "IN_PROGRESS" ? 2 :
+  ticket.statut === "TRANSFERE_MANTICE" ? 2 : // AJOUT : considéré comme "En cours"
+  ticket.assignedTo ? 1 : 0;
 
   // ✅ Afficher le bouton pour tout ticket A_CLOTURER (l’API vérifiera que le user est bien le créateur)
   const canClose = ticket.statut === "A_CLOTURER";
