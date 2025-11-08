@@ -7,8 +7,6 @@ import Link from "next/link";
 import NotificationBell from "@/app/components/NotificationBell";
 import { Eye, X, Clock, CheckCircle2, AlertCircle, XCircle, Send, Archive, PlayCircle, CheckCheck } from "lucide-react";
 
-
-
 type Ticket = {
   id: number;
   description: string;
