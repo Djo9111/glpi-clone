@@ -8,7 +8,7 @@ import { BarChart3, Building2, AppWindow, UserRound, Clock, TrendingUp, AlertCir
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
 type Role = "EMPLOYE" | "TECHNICIEN" | "CHEF_DSI";
-type StatusKey = "OPEN"|"IN_PROGRESS"|"A_CLOTURER"|"REJETE"|"TRANSFERE_MANTICE"|"CLOSED";
+type StatusKey = "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "REJETE" | "TRANSFERE_MANTICE" | "CLOSED";
 
 type TopItem = { id: number | string; nom?: string; nomComplet?: string; count: number };
 
@@ -32,10 +32,11 @@ export default function ReportingDashboard() {
   const router = useRouter();
   const [user, setUser] = useState<{ id: number; role: Role } | null>(null);
   const [range, setRange] = useState(30);
-  const [viewMode, setViewMode] = useState<"daily"|"weekly">("weekly");
+  const [viewMode, setViewMode] = useState<"daily" | "weekly">("weekly");
   const [data, setData] = useState<Reporting | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -66,21 +67,31 @@ export default function ReportingDashboard() {
     }
   };
 
+  const handleLogout = async () => {
+    setLoggingOut(true);
+
+    // Petit délai pour montrer le feedback visuel
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    localStorage.removeItem("token");
+    router.push("/login");
+  };
+
   useEffect(() => { if (user) load(range); }, [user, range]);
 
-  const totalTickets = useMemo(() => data?.statuses.reduce((a,b)=>a+b.count,0) ?? 0, [data]);
-  
+  const totalTickets = useMemo(() => data?.statuses.reduce((a, b) => a + b.count, 0) ?? 0, [data]);
+
   const metrics = useMemo(() => {
     if (!data) return null;
     const open = data.statuses.find(s => s.statut === "OPEN")?.count ?? 0;
     const inProgress = data.statuses.find(s => s.statut === "IN_PROGRESS")?.count ?? 0;
     const closed = data.statuses.find(s => s.statut === "CLOSED")?.count ?? 0;
     const rejected = data.statuses.find(s => s.statut === "REJETE")?.count ?? 0;
-    
+
     const activeTickets = open + inProgress;
     const resolutionRate = totalTickets > 0 ? Math.round((closed / totalTickets) * 100) : 0;
     const rejectionRate = totalTickets > 0 ? Math.round((rejected / totalTickets) * 100) : 0;
-    
+
     return { activeTickets, resolutionRate, rejectionRate, closed, open };
   }, [data, totalTickets]);
 
@@ -88,12 +99,12 @@ export default function ReportingDashboard() {
     if (!data) return [];
     if (viewMode === "weekly") {
       return data.seriesWeeklyTickets.map(d => ({
-        label: `Semaine du ${new Date(d.date).toLocaleDateString('fr-FR', {day:'2-digit', month:'short'})}`,
+        label: `Semaine du ${new Date(d.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}`,
         tickets: d.count
       }));
     } else {
       return data.seriesDailyTickets.map(d => ({
-        label: new Date(d.date).toLocaleDateString('fr-FR', {day:'2-digit', month:'short'}),
+        label: new Date(d.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }),
         tickets: d.count
       }));
     }
@@ -121,13 +132,32 @@ export default function ReportingDashboard() {
               <p className="text-sm text-gray-500">Vue d'ensemble des performances</p>
             </div>
           </div>
-          <div>
+          <div className="flex items-center gap-3">
             <Link
               href="/dashboard/admin-entities"
               className="px-4 py-2.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors shadow-sm font-medium"
             >
-              Admin entités
+              Gestion des ressources
             </Link>
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+            >
+              {loggingOut ? (
+                <>
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-slate-600"></div>
+                  Déconnexion...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Déconnexion
+                </>
+              )}
+            </button>
           </div>
         </div>
       </header>
@@ -187,7 +217,7 @@ export default function ReportingDashboard() {
               <div className="flex gap-3 items-center">
                 <select
                   value={range}
-                  onChange={(e)=>setRange(Number(e.target.value))}
+                  onChange={(e) => setRange(Number(e.target.value))}
                   className="border border-gray-300 rounded-lg px-4 py-2 text-sm bg-white hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all shadow-sm font-medium"
                   title="Période"
                 >
@@ -199,21 +229,19 @@ export default function ReportingDashboard() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => setViewMode("daily")}
-                    className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
-                      viewMode === "daily" 
-                        ? "bg-indigo-600 text-white shadow" 
+                    className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${viewMode === "daily"
+                        ? "bg-indigo-600 text-white shadow"
                         : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
+                      }`}
                   >
                     Journalier
                   </button>
                   <button
                     onClick={() => setViewMode("weekly")}
-                    className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
-                      viewMode === "weekly" 
-                        ? "bg-indigo-600 text-white shadow" 
+                    className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${viewMode === "weekly"
+                        ? "bg-indigo-600 text-white shadow"
                         : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
+                      }`}
                   >
                     Hebdomadaire
                   </button>
@@ -233,18 +261,18 @@ export default function ReportingDashboard() {
               <ResponsiveContainer width="100%" height={320}>
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="label" tick={{fontSize: 12}} stroke="#6b7280" />
-                  <YAxis tick={{fontSize: 12}} stroke="#6b7280" />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'white', 
-                      border: '1px solid #e5e7eb', 
+                  <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="#6b7280" />
+                  <YAxis tick={{ fontSize: 12 }} stroke="#6b7280" />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'white',
+                      border: '1px solid #e5e7eb',
                       borderRadius: '8px',
                       boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
                     }}
-                    cursor={{fill: 'rgba(99, 102, 241, 0.1)'}}
+                    cursor={{ fill: 'rgba(99, 102, 241, 0.1)' }}
                   />
-                  <Legend wrapperStyle={{fontSize: 14}} />
+                  <Legend wrapperStyle={{ fontSize: 14 }} />
                   <Bar dataKey="tickets" fill="#4f46e5" radius={[6, 6, 0, 0]} name="Nombre de tickets" />
                 </BarChart>
               </ResponsiveContainer>
@@ -268,7 +296,7 @@ export default function ReportingDashboard() {
           <Top5Card
             title="Top 5 Utilisateurs"
             icon={<UserRound className="h-5 w-5 text-teal-600" />}
-            items={data?.topUsers.map(u => ({...u, nom: u.nomComplet})) ?? []}
+            items={data?.topUsers.map(u => ({ ...u, nom: u.nomComplet })) ?? []}
             bgColor="bg-teal-50"
             total={totalTickets}
           />
@@ -302,7 +330,7 @@ export default function ReportingDashboard() {
               </div>
             </div>
           </div>
-          
+
           <div className="p-6 space-y-4">
             {data?.statuses.map((s) => {
               const percentage = totalTickets ? Math.round((s.count / totalTickets) * 100) : 0;
@@ -344,17 +372,17 @@ export default function ReportingDashboard() {
   );
 }
 
-function MetricCard({ 
-  icon, 
-  label, 
-  value, 
-  sub, 
-  trend, 
-  color 
-}: { 
-  icon: React.ReactNode; 
-  label: string; 
-  value: string; 
+function MetricCard({
+  icon,
+  label,
+  value,
+  sub,
+  trend,
+  color
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
   sub?: string;
   trend: "up" | "down" | "neutral";
   color: string;
@@ -373,9 +401,8 @@ function MetricCard({
           <div className="text-white">{icon}</div>
         </div>
         {trend !== "neutral" && (
-          <div className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg ${
-            trend === "up" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-          }`}>
+          <div className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg ${trend === "up" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+            }`}>
             {trend === "up" ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
             {trend === "up" ? "Bon" : "Attention"}
           </div>
@@ -390,17 +417,17 @@ function MetricCard({
   );
 }
 
-function Top5Card({ 
-  title, 
-  icon, 
-  items, 
-  bgColor, 
-  total 
-}: { 
-  title: string; 
-  icon: React.ReactNode; 
-  items: TopItem[]; 
-  bgColor: string; 
+function Top5Card({
+  title,
+  icon,
+  items,
+  bgColor,
+  total
+}: {
+  title: string;
+  icon: React.ReactNode;
+  items: TopItem[];
+  bgColor: string;
   total: number;
 }) {
   return (
@@ -433,7 +460,7 @@ function Top5Card({
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className="h-2 bg-gray-700 rounded-full transition-all duration-500"
                       style={{ width: `${percentage}%` }}
                     />
@@ -454,44 +481,44 @@ function Top5Card({
 function getStatusConfig(status: StatusKey) {
   switch (status) {
     case "OPEN":
-      return { 
-        icon: <AlertCircle className="h-4 w-4 text-orange-600" />, 
+      return {
+        icon: <AlertCircle className="h-4 w-4 text-orange-600" />,
         barColor: "bg-orange-500",
         bgLight: "bg-orange-50"
       };
     case "IN_PROGRESS":
-      return { 
-        icon: <Clock className="h-4 w-4 text-blue-600" />, 
+      return {
+        icon: <Clock className="h-4 w-4 text-blue-600" />,
         barColor: "bg-blue-500",
         bgLight: "bg-blue-50"
       };
     case "A_CLOTURER":
-      return { 
-        icon: <CheckCircle2 className="h-4 w-4 text-green-600" />, 
+      return {
+        icon: <CheckCircle2 className="h-4 w-4 text-green-600" />,
         barColor: "bg-green-500",
         bgLight: "bg-green-50"
       };
     case "CLOSED":
-      return { 
-        icon: <CheckCircle2 className="h-4 w-4 text-teal-600" />, 
+      return {
+        icon: <CheckCircle2 className="h-4 w-4 text-teal-600" />,
         barColor: "bg-teal-500",
         bgLight: "bg-teal-50"
       };
     case "REJETE":
-      return { 
-        icon: <XCircle className="h-4 w-4 text-red-600" />, 
+      return {
+        icon: <XCircle className="h-4 w-4 text-red-600" />,
         barColor: "bg-red-500",
         bgLight: "bg-red-50"
       };
     case "TRANSFERE_MANTICE":
-      return { 
-        icon: <TrendingUp className="h-4 w-4 text-purple-600" />, 
+      return {
+        icon: <TrendingUp className="h-4 w-4 text-purple-600" />,
         barColor: "bg-purple-500",
         bgLight: "bg-purple-50"
       };
     default:
-      return { 
-        icon: <AlertCircle className="h-4 w-4 text-gray-600" />, 
+      return {
+        icon: <AlertCircle className="h-4 w-4 text-gray-600" />,
         barColor: "bg-gray-500",
         bgLight: "bg-gray-50"
       };
@@ -512,7 +539,7 @@ function statusLabel(s: StatusKey) {
 
 function fmtMinutes(m: number) {
   if (!m || m <= 0) return "0 min";
-  const h = Math.floor(m/60);
+  const h = Math.floor(m / 60);
   const r = m % 60;
   return h ? `${h}h ${r}min` : `${r} min`;
 }

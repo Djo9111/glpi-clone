@@ -76,6 +76,7 @@ export default function TechnicianTicketsDashboard() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(false);
 
+
   const [modalOpen, setModalOpen] = useState(false);
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
   const [manticeNumeroInput, setManticeNumeroInput] = useState<string>("");
@@ -84,6 +85,8 @@ export default function TechnicianTicketsDashboard() {
   const [statusFilter, setStatusFilter] = useState<Ticket["statut"] | "ALL">("ALL");
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
+
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -198,7 +201,12 @@ export default function TechnicianTicketsDashboard() {
     setShowManticeInput(false);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    setLoggingOut(true);
+
+    // Petit délai pour montrer le feedback visuel
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     localStorage.removeItem("token");
     router.push("/login");
   };
@@ -286,9 +294,22 @@ export default function TechnicianTicketsDashboard() {
             </button>
             <button
               onClick={handleLogout}
-              className="px-4 py-2 text-sm font-medium rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors"
+              disabled={loggingOut}
+              className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs md:text-sm font-medium text-slate-700 hover:bg-slate-50 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Déconnexion
+              {loggingOut ? (
+                <>
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-slate-600"></div>
+                  Déconnexion...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Déconnexion
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -463,8 +484,8 @@ export default function TechnicianTicketsDashboard() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ticket.type === "ASSISTANCE"
-                          ? "bg-blue-100 text-blue-800"
-                          : "bg-purple-100 text-purple-800"
+                        ? "bg-blue-100 text-blue-800"
+                        : "bg-purple-100 text-purple-800"
                         }`}>
                         {ticket.type === "ASSISTANCE" ? "Assistance" : "Intervention"}
                       </span>
@@ -529,8 +550,8 @@ export default function TechnicianTicketsDashboard() {
               </h3>
               <div className="flex flex-wrap gap-2">
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${activeTicket.type === "ASSISTANCE"
-                    ? "bg-blue-100 text-blue-800"
-                    : "bg-purple-100 text-purple-800"
+                  ? "bg-blue-100 text-blue-800"
+                  : "bg-purple-100 text-purple-800"
                   }`}>
                   {activeTicket.type === "ASSISTANCE" ? "Assistance" : "Intervention"}
                 </span>
@@ -693,8 +714,8 @@ function ClickableStatCard({
     <button
       onClick={onClick}
       className={`${bgColor} rounded-xl p-4 border-2 transition-all cursor-pointer text-left ${isActive
-          ? `border-${color.split("-")[1]}-500 shadow-lg scale-105`
-          : "border-slate-200 hover:border-slate-300 hover:shadow-md"
+        ? `border-${color.split("-")[1]}-500 shadow-lg scale-105`
+        : "border-slate-200 hover:border-slate-300 hover:shadow-md"
         }`}
     >
       <div className="flex items-center justify-between mb-2">

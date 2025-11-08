@@ -42,6 +42,8 @@ export default function TechTicketDetail() {
 
   // ✅ champs Mantice
   const [manticeNumeroInput, setManticeNumeroInput] = useState<string>("");
+  // logout
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -200,7 +202,12 @@ export default function TechTicketDetail() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    setLoggingOut(true);
+
+    // Petit délai pour montrer le feedback visuel
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     localStorage.removeItem("token");
     router.push("/login");
   };
@@ -270,9 +277,22 @@ export default function TechTicketDetail() {
             </Link>
             <button
               onClick={handleLogout}
-              className="px-4 py-2 text-sm font-medium rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors"
+              disabled={loggingOut}
+              className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs md:text-sm font-medium text-slate-700 hover:bg-slate-50 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Déconnexion
+              {loggingOut ? (
+                <>
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-slate-600"></div>
+                  Déconnexion...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Déconnexion
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -288,11 +308,10 @@ export default function TechTicketDetail() {
               <div className="flex items-start justify-between gap-4 mb-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-3">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      ticket.type === "ASSISTANCE"
-                        ? "bg-blue-100 text-blue-800"
-                        : "bg-purple-100 text-purple-800"
-                    }`}>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ticket.type === "ASSISTANCE"
+                      ? "bg-blue-100 text-blue-800"
+                      : "bg-purple-100 text-purple-800"
+                      }`}>
                       {ticket.type === "ASSISTANCE" ? "Assistance" : "Intervention"}
                     </span>
                     <StatusBadge status={ticket.statut} />

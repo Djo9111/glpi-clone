@@ -73,6 +73,8 @@ export default function AdminEntitiesPage() {
 
   // Auth
   const [user, setUser] = useState<{ id: number; role: Role } | null>(null);
+  //logout
+  const [loggingOut, setLoggingOut] = useState(false);
 
   // Data référentielles
   const [departements, setDepartements] = useState<Departement[]>([]);
@@ -231,6 +233,17 @@ export default function AdminEntitiesPage() {
     finally { setLoading(false); }
   };
 
+  const handleLogout = async () => {
+    setLoggingOut(true);
+
+    // Petit délai pour montrer le feedback visuel
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    localStorage.removeItem("token");
+    router.push("/login");
+  };
+
+
   const handleCreateMat = async (e: React.FormEvent) => {
     e.preventDefault(); if (loading) return;
     const nom = formMat.nom.trim();
@@ -311,10 +324,10 @@ export default function AdminEntitiesPage() {
     try {
       setLoading(true);
       const updated = await patchJson(`/api/applications/${editId}`, { nom });
-      setApplications(prev => upsertByIdOrName(prev, updated).sort((a,b)=>a.nom.localeCompare(b.nom)));
+      setApplications(prev => upsertByIdOrName(prev, updated).sort((a, b) => a.nom.localeCompare(b.nom)));
       setNotif({ type: "success", msg: "Application mise à jour." });
       await fetchAll(); closeModal();
-    } catch (err:any) { setNotif({ type: "error", msg: err.message || "Mise à jour impossible." }); }
+    } catch (err: any) { setNotif({ type: "error", msg: err.message || "Mise à jour impossible." }); }
     finally { setLoading(false); }
   };
 
@@ -325,10 +338,10 @@ export default function AdminEntitiesPage() {
     try {
       setLoading(true);
       const updated = await patchJson(`/api/departements/${editId}`, { nom, responsableId });
-      setDepartements(prev => upsertByIdOrName(prev, updated).sort((a,b)=>a.nom.localeCompare(b.nom)));
+      setDepartements(prev => upsertByIdOrName(prev, updated).sort((a, b) => a.nom.localeCompare(b.nom)));
       setNotif({ type: "success", msg: "Département mis à jour." });
       await fetchAll(); closeModal();
-    } catch (err:any) { setNotif({ type: "error", msg: err.message || "Mise à jour impossible." }); }
+    } catch (err: any) { setNotif({ type: "error", msg: err.message || "Mise à jour impossible." }); }
     finally { setLoading(false); }
   };
 
@@ -338,10 +351,10 @@ export default function AdminEntitiesPage() {
     try {
       setLoading(true);
       const updated = await patchJson(`/api/materiels/${editId}`, { nom });
-      setMateriels(prev => upsertByIdOrName(prev, updated).sort((a,b)=>a.nom.localeCompare(b.nom)));
+      setMateriels(prev => upsertByIdOrName(prev, updated).sort((a, b) => a.nom.localeCompare(b.nom)));
       setNotif({ type: "success", msg: "Matériel mis à jour." });
       await fetchAll(); closeModal();
-    } catch (err:any) { setNotif({ type: "error", msg: err.message || "Mise à jour impossible." }); }
+    } catch (err: any) { setNotif({ type: "error", msg: err.message || "Mise à jour impossible." }); }
     finally { setLoading(false); }
   };
 
@@ -373,14 +386,14 @@ export default function AdminEntitiesPage() {
       }));
       setNotif({ type: "success", msg: "Utilisateur mis à jour." });
       await fetchAll(); closeModal();
-    } catch (err:any) { setNotif({ type: "error", msg: err.message || "Mise à jour impossible." }); }
+    } catch (err: any) { setNotif({ type: "error", msg: err.message || "Mise à jour impossible." }); }
     finally { setLoading(false); }
   };
 
   // ======================================================
   // DELETE handlers
   // ======================================================
-  const confirmAndDelete = async (kind: "application"|"departement"|"materiel"|"utilisateur", id: number) => {
+  const confirmAndDelete = async (kind: "application" | "departement" | "materiel" | "utilisateur", id: number) => {
     if (!window.confirm("Confirmer la suppression ?")) return;
     try {
       setLoading(true);
@@ -391,7 +404,7 @@ export default function AdminEntitiesPage() {
       if (kind === "utilisateur") setUtilisateurs(prev => prev.filter(x => x.id !== id));
       setNotif({ type: "success", msg: "Supprimé avec succès." });
       await fetchAll();
-    } catch (err:any) {
+    } catch (err: any) {
       setNotif({ type: "error", msg: err.message || "Suppression impossible." });
     } finally {
       setLoading(false);
@@ -399,20 +412,20 @@ export default function AdminEntitiesPage() {
   };
 
   // Filtered & Paginated Data
-  const filteredApps = useMemo(() => 
+  const filteredApps = useMemo(() =>
     applications.filter(a => a.nom.toLowerCase().includes(searchTerms.apps.toLowerCase())),
     [applications, searchTerms.apps]
   );
-  const filteredDeps = useMemo(() => 
+  const filteredDeps = useMemo(() =>
     departements.filter(d => d.nom.toLowerCase().includes(searchTerms.deps.toLowerCase())),
     [departements, searchTerms.deps]
   );
-  const filteredMats = useMemo(() => 
+  const filteredMats = useMemo(() =>
     materiels.filter(m => m.nom.toLowerCase().includes(searchTerms.mats.toLowerCase())),
     [materiels, searchTerms.mats]
   );
-  const filteredUsers = useMemo(() => 
-    utilisateurs.filter(u => 
+  const filteredUsers = useMemo(() =>
+    utilisateurs.filter(u =>
       `${u.prenom} ${u.nom} ${u.email}`.toLowerCase().includes(searchTerms.users.toLowerCase())
     ),
     [utilisateurs, searchTerms.users]
@@ -447,9 +460,9 @@ export default function AdminEntitiesPage() {
 
   // Stats
   const stats = useMemo(() => ({
-    apps: applications.length, 
-    deps: departements.length, 
-    mats: materiels.length, 
+    apps: applications.length,
+    deps: departements.length,
+    mats: materiels.length,
     users: utilisateurs.length,
   }), [applications.length, departements.length, materiels.length, utilisateurs.length]);
 
@@ -488,10 +501,23 @@ export default function AdminEntitiesPage() {
               Tickets
             </Link>
             <button
-              onClick={() => { localStorage.removeItem("token"); router.push("/login"); }}
-              className="px-4 py-2.5 text-sm font-medium rounded-lg bg-gradient-to-r from-slate-900 to-slate-700 text-white hover:from-slate-800 hover:to-slate-600 transition-all shadow-sm"
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs md:text-sm font-medium text-slate-700 hover:bg-slate-50 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Déconnexion
+              {loggingOut ? (
+                <>
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-slate-600"></div>
+                  Déconnexion...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Déconnexion
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -500,11 +526,10 @@ export default function AdminEntitiesPage() {
       <main className="mx-auto max-w-7xl w-full px-6 py-8 space-y-8">
         {/* Notif */}
         {notif && (
-          <div className={`rounded-xl px-5 py-4 text-sm border shadow-sm animate-in fade-in slide-in-from-top-2 ${
-            notif.type === "success" 
+          <div className={`rounded-xl px-5 py-4 text-sm border shadow-sm animate-in fade-in slide-in-from-top-2 ${notif.type === "success"
               ? "bg-gradient-to-r from-emerald-50 to-emerald-100/50 border-emerald-300 text-emerald-900"
               : "bg-gradient-to-r from-rose-50 to-rose-100/50 border-rose-300 text-rose-900"
-          }`}>
+            }`}>
             <div className="flex items-center gap-2">
               <div className={`h-2 w-2 rounded-full ${notif.type === "success" ? "bg-emerald-500" : "bg-rose-500"}`} />
               <span className="font-medium">{notif.msg}</span>
@@ -544,11 +569,10 @@ export default function AdminEntitiesPage() {
               <button
                 key={size}
                 onClick={() => setPageSize(size)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  pageSize === size
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${pageSize === size
                     ? "bg-blue-600 text-white shadow-sm"
                     : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                }`}
+                  }`}
               >
                 {size}
               </button>
@@ -599,8 +623,8 @@ export default function AdminEntitiesPage() {
             onPageChange={(p) => setCurrentPages(prev => ({ ...prev, deps: p }))}
             searchTerm={searchTerms.deps}
             onSearchChange={(v) => setSearchTerms(prev => ({ ...prev, deps: v }))}
-            renderRow={(d) => ({ 
-              id: d.id, 
+            renderRow={(d) => ({
+              id: d.id,
               main: d.nom,
               sub: d.responsable ? `Resp: ${d.responsable.prenom} ${d.responsable.nom}` : undefined
             })}
@@ -618,8 +642,8 @@ export default function AdminEntitiesPage() {
             onPageChange={(p) => setCurrentPages(prev => ({ ...prev, users: p }))}
             searchTerm={searchTerms.users}
             onSearchChange={(v) => setSearchTerms(prev => ({ ...prev, users: v }))}
-            renderRow={(u) => ({ 
-              id: u.id, 
+            renderRow={(u) => ({
+              id: u.id,
               main: `${u.prenom} ${u.nom}`,
               sub: `${u.email} • ${u.role} • Code: ${u.codeHierarchique}${u.departement ? ` • ${u.departement.nom}` : ""}`
             })}
@@ -631,7 +655,7 @@ export default function AdminEntitiesPage() {
 
       {/* Modales CRÉATION */}
       {openModal === "application" && (
-        <Modal title="Nouvelle application" onClose={loading ? () => {} : closeModal}>
+        <Modal title="Nouvelle application" onClose={loading ? () => { } : closeModal}>
           <form onSubmit={handleCreateApp} className="space-y-4">
             <Input label="Nom de l'application" value={formApp.nom} onChange={v => setFormApp({ nom: v })} placeholder="Ex. Word" />
             <FormActions loading={loading} onCancel={closeModal} />
@@ -640,7 +664,7 @@ export default function AdminEntitiesPage() {
       )}
 
       {openModal === "departement" && (
-        <Modal title="Nouveau département" onClose={loading ? () => {} : closeModal}>
+        <Modal title="Nouveau département" onClose={loading ? () => { } : closeModal}>
           <form onSubmit={handleCreateDep} className="space-y-4">
             <Input label="Nom du département" value={formDep.nom} onChange={v => setFormDep(s => ({ ...s, nom: v }))} placeholder="Ex. DSI" />
             <div>
@@ -664,7 +688,7 @@ export default function AdminEntitiesPage() {
       )}
 
       {openModal === "materiel" && (
-        <Modal title="Nouveau matériel" onClose={loading ? () => {} : closeModal}>
+        <Modal title="Nouveau matériel" onClose={loading ? () => { } : closeModal}>
           <form onSubmit={handleCreateMat} className="space-y-4">
             <Input label="Nom du matériel" value={formMat.nom} onChange={v => setFormMat({ nom: v })} placeholder="Ex. Imprimante" />
             <FormActions loading={loading} onCancel={closeModal} />
@@ -673,7 +697,7 @@ export default function AdminEntitiesPage() {
       )}
 
       {openModal === "utilisateur" && (
-        <Modal title="Nouvel utilisateur" onClose={loading ? () => {} : closeModal}>
+        <Modal title="Nouvel utilisateur" onClose={loading ? () => { } : closeModal}>
           <form onSubmit={handleCreateUser} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input label="Prénom" value={formUser.prenom} onChange={v => setFormUser(s => ({ ...s, prenom: v }))} placeholder="Ex. Awa" />
@@ -707,17 +731,17 @@ export default function AdminEntitiesPage() {
                   {departements.map((d) => <option key={d.id} value={d.id}>{d.nom}</option>)}
                 </select>
               </div>
-              <Input 
-                label="Code hiérarchique" 
-                value={formUser.codeHierarchique} 
-                onChange={v => setFormUser(s => ({ ...s, codeHierarchique: v }))} 
+              <Input
+                label="Code hiérarchique"
+                value={formUser.codeHierarchique}
+                onChange={v => setFormUser(s => ({ ...s, codeHierarchique: v }))}
                 placeholder="0, 1, 2..."
                 type="number"
               />
             </div>
             <Input label="Matricule (optionnel)" value={formUser.matricule} onChange={v => setFormUser(s => ({ ...s, matricule: v }))} placeholder="Ex. EMP-00123" />
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-              <strong>Code hiérarchique :</strong> 0 = employé simple, 1+ = niveaux de supervision. 
+              <strong>Code hiérarchique :</strong> 0 = employé simple, 1+ = niveaux de supervision.
               Un code supérieur permet de voir les tickets des utilisateurs du même département avec un code inférieur.
             </div>
             <FormActions loading={loading} onCancel={closeModal} />
@@ -727,7 +751,7 @@ export default function AdminEntitiesPage() {
 
       {/* Modales ÉDITION */}
       {openModal === "edit-application" && (
-        <Modal title="Modifier l'application" onClose={loading ? () => {} : closeModal}>
+        <Modal title="Modifier l'application" onClose={loading ? () => { } : closeModal}>
           <form onSubmit={handlePatchApp} className="space-y-4">
             <Input label="Nom" value={editApp.nom} onChange={v => setEditApp({ nom: v })} />
             <FormActions loading={loading} onCancel={closeModal} submitLabel="Enregistrer" />
@@ -736,7 +760,7 @@ export default function AdminEntitiesPage() {
       )}
 
       {openModal === "edit-departement" && (
-        <Modal title="Modifier le département" onClose={loading ? () => {} : closeModal}>
+        <Modal title="Modifier le département" onClose={loading ? () => { } : closeModal}>
           <form onSubmit={handlePatchDep} className="space-y-4">
             <Input label="Nom" value={editDep.nom} onChange={v => setEditDep(s => ({ ...s, nom: v }))} />
             <div>
@@ -760,7 +784,7 @@ export default function AdminEntitiesPage() {
       )}
 
       {openModal === "edit-materiel" && (
-        <Modal title="Modifier le matériel" onClose={loading ? () => {} : closeModal}>
+        <Modal title="Modifier le matériel" onClose={loading ? () => { } : closeModal}>
           <form onSubmit={handlePatchMat} className="space-y-4">
             <Input label="Nom" value={editMat.nom} onChange={v => setEditMat({ nom: v })} />
             <FormActions loading={loading} onCancel={closeModal} submitLabel="Enregistrer" />
@@ -769,7 +793,7 @@ export default function AdminEntitiesPage() {
       )}
 
       {openModal === "edit-utilisateur" && (
-        <Modal title="Modifier l'utilisateur" onClose={loading ? () => {} : closeModal}>
+        <Modal title="Modifier l'utilisateur" onClose={loading ? () => { } : closeModal}>
           <form onSubmit={handlePatchUser} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input label="Prénom" value={editUser.prenom} onChange={v => setEditUser(s => ({ ...s, prenom: v }))} />
@@ -799,17 +823,17 @@ export default function AdminEntitiesPage() {
                   {departements.map((d) => <option key={d.id} value={d.id}>{d.nom}</option>)}
                 </select>
               </div>
-              <Input 
-                label="Code hiérarchique" 
-                value={editUser.codeHierarchique} 
-                onChange={v => setEditUser(s => ({ ...s, codeHierarchique: v }))} 
+              <Input
+                label="Code hiérarchique"
+                value={editUser.codeHierarchique}
+                onChange={v => setEditUser(s => ({ ...s, codeHierarchique: v }))}
                 type="number"
               />
             </div>
             <Input label="Matricule (optionnel)" value={editUser.matricule} onChange={v => setEditUser(s => ({ ...s, matricule: v }))} />
             <Input type="password" label="Nouveau mot de passe (optionnel)" value={editUser.motDePasse || ""} onChange={v => setEditUser(s => ({ ...s, motDePasse: v }))} placeholder="laisser vide pour ne pas changer" />
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-              <strong>Code hiérarchique :</strong> 0 = employé simple, 1+ = niveaux de supervision. 
+              <strong>Code hiérarchique :</strong> 0 = employé simple, 1+ = niveaux de supervision.
               Un code supérieur permet de voir les tickets des utilisateurs du même département avec un code inférieur.
             </div>
             <FormActions loading={loading} onCancel={closeModal} submitLabel="Enregistrer" />
@@ -823,9 +847,9 @@ export default function AdminEntitiesPage() {
 /* =========================================================
    Composants UI auxiliaires
    ========================================================= */
-function MiniStat({ icon, label, value, color }: { 
-  icon: React.ReactNode; 
-  label: string; 
+function MiniStat({ icon, label, value, color }: {
+  icon: React.ReactNode;
+  label: string;
   value: number;
   color: "blue" | "purple" | "orange" | "green";
 }) {
@@ -835,7 +859,7 @@ function MiniStat({ icon, label, value, color }: {
     orange: "from-orange-500 to-orange-600",
     green: "from-green-500 to-green-600",
   };
-  
+
   return (
     <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200/80 shadow-lg p-6 hover:shadow-xl transition-shadow">
       <div className="flex items-center justify-between">
@@ -849,10 +873,10 @@ function MiniStat({ icon, label, value, color }: {
   );
 }
 
-function EntityButton({ icon, title, subtitle, onClick, color }:{
-  icon: React.ReactNode; 
-  title: string; 
-  subtitle: string; 
+function EntityButton({ icon, title, subtitle, onClick, color }: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
   onClick: () => void;
   color: "blue" | "purple" | "orange" | "green";
 }) {
@@ -862,7 +886,7 @@ function EntityButton({ icon, title, subtitle, onClick, color }:{
     orange: { bg: "bg-orange-50 hover:bg-orange-100", text: "text-orange-700", border: "hover:border-orange-300" },
     green: { bg: "bg-green-50 hover:bg-green-100", text: "text-green-700", border: "hover:border-green-300" },
   };
-  
+
   return (
     <button
       onClick={onClick}
@@ -886,7 +910,7 @@ function EntityButton({ icon, title, subtitle, onClick, color }:{
 }
 
 function ManageCard<T>({
-  title, icon, color, data, total, currentPage, totalPages, onPageChange, 
+  title, icon, color, data, total, currentPage, totalPages, onPageChange,
   searchTerm, onSearchChange, renderRow, onEdit, onDelete,
 }: {
   title: string;
@@ -1037,7 +1061,7 @@ function Input({
   );
 }
 
-function FormActions({ loading, onCancel, submitLabel = "Créer" }:{
+function FormActions({ loading, onCancel, submitLabel = "Créer" }: {
   loading: boolean; onCancel: () => void; submitLabel?: string;
 }) {
   return (
@@ -1071,7 +1095,7 @@ function FormActions({ loading, onCancel, submitLabel = "Créer" }:{
   );
 }
 
-function Modal({ title, onClose, children }:{
+function Modal({ title, onClose, children }: {
   title: string; onClose: () => void; children: React.ReactNode;
 }) {
   return (

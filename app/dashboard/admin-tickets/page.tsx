@@ -61,10 +61,10 @@ function normalizeTicket(raw: any): Ticket {
     },
     assignedTo: raw.assignedTo
       ? {
-          id: Number(raw.assignedTo.id),
-          prenom: String(raw.assignedTo.prenom ?? ""),
-          nom: String(raw.assignedTo.nom ?? ""),
-        }
+        id: Number(raw.assignedTo.id),
+        prenom: String(raw.assignedTo.prenom ?? ""),
+        nom: String(raw.assignedTo.nom ?? ""),
+      }
       : null,
     application: raw.application
       ? { id: Number(raw.application.id), nom: String(raw.application.nom ?? "") }
@@ -87,6 +87,7 @@ export default function AdminTicketsDashboard() {
   const [statusFilter, setStatusFilter] = useState<Ticket["statut"] | "ALL">("ALL");
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -197,7 +198,12 @@ export default function AdminTicketsDashboard() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    setLoggingOut(true);
+
+    // Petit délai pour montrer le feedback visuel
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     localStorage.removeItem("token");
     router.push("/login");
   };
@@ -276,9 +282,22 @@ export default function AdminTicketsDashboard() {
             </Link>
             <button
               onClick={handleLogout}
-              className="px-4 py-2 text-sm font-medium rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors"
+              disabled={loggingOut}
+              className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs md:text-sm font-medium text-slate-700 hover:bg-slate-50 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Déconnexion
+              {loggingOut ? (
+                <>
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-slate-600"></div>
+                  Déconnexion...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Déconnexion
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -449,11 +468,10 @@ export default function AdminTicketsDashboard() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        ticket.type === "ASSISTANCE"
-                          ? "bg-blue-100 text-blue-800"
-                          : "bg-purple-100 text-purple-800"
-                      }`}>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ticket.type === "ASSISTANCE"
+                        ? "bg-blue-100 text-blue-800"
+                        : "bg-purple-100 text-purple-800"
+                        }`}>
                         {ticket.type === "ASSISTANCE" ? "Assistance" : "Intervention"}
                       </span>
                     </td>
@@ -520,11 +538,10 @@ export default function AdminTicketsDashboard() {
                 {activeTicket.description || "(Sans titre)"}
               </h3>
               <div className="flex flex-wrap gap-2">
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  activeTicket.type === "ASSISTANCE"
-                    ? "bg-blue-100 text-blue-800"
-                    : "bg-purple-100 text-purple-800"
-                }`}>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${activeTicket.type === "ASSISTANCE"
+                  ? "bg-blue-100 text-blue-800"
+                  : "bg-purple-100 text-purple-800"
+                  }`}>
                   {activeTicket.type === "ASSISTANCE" ? "Assistance" : "Intervention"}
                 </span>
                 {activeTicket.application?.nom && (
@@ -624,11 +641,10 @@ function ClickableStatCard({
   return (
     <button
       onClick={onClick}
-      className={`${bgColor} rounded-xl p-4 border-2 transition-all cursor-pointer text-left ${
-        isActive
-          ? `border-${color.split("-")[1]}-500 shadow-lg scale-105`
-          : "border-slate-200 hover:border-slate-300 hover:shadow-md"
-      }`}
+      className={`${bgColor} rounded-xl p-4 border-2 transition-all cursor-pointer text-left ${isActive
+        ? `border-${color.split("-")[1]}-500 shadow-lg scale-105`
+        : "border-slate-200 hover:border-slate-300 hover:shadow-md"
+        }`}
     >
       <div className="flex items-center justify-between mb-2">
         <div className={`${color} text-white p-2 rounded-lg`}>
@@ -732,7 +748,7 @@ function Modal({
           onClick={onClose}
           aria-hidden
         />
-        
+
         <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200">
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
             <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
