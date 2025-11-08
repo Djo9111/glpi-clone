@@ -7,6 +7,8 @@ import Link from "next/link";
 import NotificationBell from "@/app/components/NotificationBell";
 import { Eye, X, Clock, CheckCircle2, AlertCircle, XCircle, Send, Archive, PlayCircle, CheckCheck } from "lucide-react";
 
+
+
 type Ticket = {
   id: number;
   description: string;
@@ -462,11 +464,10 @@ export default function TechnicianTicketsDashboard() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        ticket.type === "ASSISTANCE"
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ticket.type === "ASSISTANCE"
                           ? "bg-blue-100 text-blue-800"
                           : "bg-purple-100 text-purple-800"
-                      }`}>
+                        }`}>
                         {ticket.type === "ASSISTANCE" ? "Assistance" : "Intervention"}
                       </span>
                     </td>
@@ -529,11 +530,10 @@ export default function TechnicianTicketsDashboard() {
                 {activeTicket.description || "(Sans titre)"}
               </h3>
               <div className="flex flex-wrap gap-2">
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  activeTicket.type === "ASSISTANCE"
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${activeTicket.type === "ASSISTANCE"
                     ? "bg-blue-100 text-blue-800"
                     : "bg-purple-100 text-purple-800"
-                }`}>
+                  }`}>
                   {activeTicket.type === "ASSISTANCE" ? "Assistance" : "Intervention"}
                 </span>
                 {activeTicket.application?.nom && (
@@ -694,11 +694,10 @@ function ClickableStatCard({
   return (
     <button
       onClick={onClick}
-      className={`${bgColor} rounded-xl p-4 border-2 transition-all cursor-pointer text-left ${
-        isActive
+      className={`${bgColor} rounded-xl p-4 border-2 transition-all cursor-pointer text-left ${isActive
           ? `border-${color.split("-")[1]}-500 shadow-lg scale-105`
           : "border-slate-200 hover:border-slate-300 hover:shadow-md"
-      }`}
+        }`}
     >
       <div className="flex items-center justify-between mb-2">
         <div className={`${color} text-white p-2 rounded-lg`}>
@@ -802,7 +801,7 @@ function Modal({
           onClick={onClose}
           aria-hidden
         />
-        
+
         <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200">
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
             <h3 className="text-lg font-semibold text-slate-900">{title}</h3>

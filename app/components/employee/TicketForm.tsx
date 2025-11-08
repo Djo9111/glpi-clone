@@ -1,4 +1,4 @@
-import { TicketForm as TicketFormType, Application, Materiel } from "../../utils/ticketHelpers";
+import { TicketForm as TicketFormType, Application, Materiel } from "../../dashboard/employee/utils/ticketHelpers";
 
 const MAX_FILES = 5;
 
@@ -38,8 +38,8 @@ export default function TicketForm({
                         } as React.ChangeEvent<HTMLSelectElement>)
                     }
                     className={`text-left border rounded-md p-3 transition ${ticketForm.typeTicket === "ASSISTANCE"
-                            ? "border-blue-500 bg-blue-50/50"
-                            : "border-slate-200 hover:bg-slate-50"
+                        ? "border-blue-500 bg-blue-50/50"
+                        : "border-slate-200 hover:bg-slate-50"
                         }`}
                 >
                     <div className="font-medium text-slate-800">Assistance</div>
@@ -54,8 +54,8 @@ export default function TicketForm({
                         } as React.ChangeEvent<HTMLSelectElement>)
                     }
                     className={`text-left border rounded-md p-3 transition ${ticketForm.typeTicket === "INTERVENTION"
-                            ? "border-purple-500 bg-purple-50/50"
-                            : "border-slate-200 hover:bg-slate-50"
+                        ? "border-purple-500 bg-purple-50/50"
+                        : "border-slate-200 hover:bg-slate-50"
                         }`}
                 >
                     <div className="font-medium text-slate-800">Intervention</div>

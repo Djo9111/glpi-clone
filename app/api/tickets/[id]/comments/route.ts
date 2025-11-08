@@ -154,7 +154,7 @@ export async function POST(
 
     if (!allowed) {
       return NextResponse.json(
-        { error: "Seuls le technicien assigné, le chef DSI ou le créateur peuvent commenter" },
+        { error: "Seuls le technicien assigné, l'admin ou le créateur peuvent commenter" },
         { status: 403 }
       );
     }

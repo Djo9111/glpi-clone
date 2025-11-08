@@ -17,6 +17,7 @@ export default function NotificationBell() {
   const [items, setItems] = useState<Notif[]>([]);
   const [role, setRole] = useState<string | null>(null);
   const timerRef = useRef<number | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const fetchNotifications = async () => {
     const token = localStorage.getItem("token");
@@ -35,14 +36,56 @@ export default function NotificationBell() {
       console.error(e);
     }
   };
-
+  // remplacer useEffect par pour diminuer les logs
+  /*
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+  
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      setRole(payload.role ?? null);
+    } catch {
+      return; // Si token invalide, on arrête
+    }
+  
+    let mounted = true;
+  
+    const fetchWithValidation = async () => {
+      if (!mounted) return;
+      
+      const currentToken = localStorage.getItem("token");
+      if (!currentToken) {
+        if (timerRef.current) clearInterval(timerRef.current);
+        return;
+      }
+  
+      try {
+        await fetchNotifications();
+      } catch (error) {
+        console.error('Erreur fetch notifications:', error);
+      }
+    };
+  
+    // Premier appel immédiat
+    fetchWithValidation();
+  
+    // Polling toutes les 60 secondes au lieu de 12
+    timerRef.current = window.setInterval(fetchWithValidation, 60000);
+  
+    return () => {
+      mounted = false;
+      if (timerRef.current) window.clearInterval(timerRef.current);
+    };
+  }, []);
+  */
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split(".")[1]));
         setRole(payload.role ?? null);
-      } catch {}
+      } catch { }
     }
 
     fetchNotifications();
@@ -51,49 +94,22 @@ export default function NotificationBell() {
       if (timerRef.current) window.clearInterval(timerRef.current);
     };
   }, []);
-// remplacer useEffect par pour diminuer les logs
-/*
-useEffect(() => {
-  const token = localStorage.getItem("token");
-  if (!token) return;
 
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    setRole(payload.role ?? null);
-  } catch {
-    return; // Si token invalide, on arrête
-  }
+  // Fermeture quand on clique en dehors
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
 
-  let mounted = true;
+    document.addEventListener('mousedown', handleClickOutside);
 
-  const fetchWithValidation = async () => {
-    if (!mounted) return;
-    
-    const currentToken = localStorage.getItem("token");
-    if (!currentToken) {
-      if (timerRef.current) clearInterval(timerRef.current);
-      return;
-    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
-    try {
-      await fetchNotifications();
-    } catch (error) {
-      console.error('Erreur fetch notifications:', error);
-    }
-  };
-
-  // Premier appel immédiat
-  fetchWithValidation();
-
-  // Polling toutes les 60 secondes au lieu de 12
-  timerRef.current = window.setInterval(fetchWithValidation, 60000);
-
-  return () => {
-    mounted = false;
-    if (timerRef.current) window.clearInterval(timerRef.current);
-  };
-}, []);
-*/
   const markAllRead = async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -115,18 +131,16 @@ useEffect(() => {
     }
   };
 
-  // Détermine le lien selon le rôle
   const getTicketLink = (id?: number) => {
     if (!id) return null;
     if (role === "CHEF_DSI") return `/dashboard/admin-tickets/${id}`;
     if (role === "TECHNICIEN") return `/dashboard/technicien/${id}`;
-    // Pour les employés, on redirige vers l'onglet "Mes tickets"
     if (role === "EMPLOYE") return `/dashboard/employee?tab=tickets`;
     return null;
   };
 
   return (
-    <div className="relative">
+    <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setOpen(!open)}
         className="relative inline-flex items-center justify-center rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm font-medium hover:bg-amber-50"
@@ -162,13 +176,12 @@ useEffect(() => {
             <ul className="divide-y divide-amber-100">
               {items.map(n => {
                 const ticketLink = getTicketLink(n.ticket?.id);
-                
+
                 return (
                   <li
                     key={n.id}
-                    className={`px-4 py-3 ${
-                      n.isRead ? "bg-white" : "bg-amber-50/50"
-                    }`}
+                    className={`px-4 py-3 ${n.isRead ? "bg-white" : "bg-amber-50/50"
+                      }`}
                   >
                     <div className="flex justify-between items-start gap-3">
                       <div className="flex-1">
@@ -176,8 +189,7 @@ useEffect(() => {
                         <p className="mt-1 text-xs text-neutral-500">
                           {new Date(n.dateEnvoi).toLocaleString()}
                         </p>
-                        
-                        {/* Affichage du lien uniquement pour Admin et Technicien */}
+
                         {ticketLink && role !== "EMPLOYE" && (
                           <div className="mt-2">
                             <Link

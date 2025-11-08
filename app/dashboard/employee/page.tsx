@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import NotificationBell from "@/app/components/NotificationBell";
-import TicketForm from "./components/employee/TicketForm";
-import TicketsList from "./components/employee/TicketsList";
-import TeamSection from "./components/employee/TeamSection";
-import TicketDrawer from "./components/employee/TicketDrawer";
+import TicketForm from "../../components/employee/TicketForm";
+import TicketsList from "../../components/employee/TicketsList";
+import TeamSection from "../../components/employee/TeamSection";
+import TicketDrawer from "../../components/employee/TicketDrawer";
 import { normalizeTicket, normalizeStatus } from "./utils/ticketHelpers";
 import type { Ticket, TicketStatut, SubordinateUser, Application, Materiel, TicketForm as TicketFormType } from "./utils/ticketHelpers";
 
@@ -14,6 +14,9 @@ const MAX_FILES = 5;
 
 export default function EmployeeDashboard() {
   const router = useRouter();
+
+  // —— Déconnexion ——
+  const [loggingOut, setLoggingOut] = useState(false);
 
   // —— Session / onglet ——
   const [user, setUser] = useState<{
@@ -54,13 +57,13 @@ export default function EmployeeDashboard() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | TicketStatut>("ALL");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<5 | 10 | 20 | 50>(10);
+  const [pageSize, setPageSize] = useState<6 | 12 | 18 | 24>(6); // 6 par défaut
 
   // —— Filtres pour tickets des subordonnés ——
   const [subQuery, setSubQuery] = useState("");
   const [subStatusFilter, setSubStatusFilter] = useState<"ALL" | TicketStatut>("ALL");
   const [subPage, setSubPage] = useState(1);
-  const [subPageSize, setSubPageSize] = useState<5 | 10 | 20 | 50>(10);
+  const [subPageSize, setSubPageSize] = useState<6 | 12 | 18 | 24>(6); // 6 par défaut
 
   // —— Sélection ——
   const [selected, setSelected] = useState<Ticket | null>(null);
@@ -300,7 +303,12 @@ export default function EmployeeDashboard() {
   // ————————————————————————————————————————
   // Logout
   // ————————————————————————————————————————
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    setLoggingOut(true);
+
+    // Petit délai pour montrer le feedback visuel
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     localStorage.removeItem("token");
     router.push("/login");
   };
@@ -389,9 +397,22 @@ export default function EmployeeDashboard() {
             <NotificationBell />
             <button
               onClick={handleLogout}
-              className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs md:text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
+              disabled={loggingOut}
+              className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs md:text-sm font-medium text-slate-700 hover:bg-slate-50 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Déconnexion
+              {loggingOut ? (
+                <>
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-slate-600"></div>
+                  Déconnexion...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Déconnexion
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -402,8 +423,8 @@ export default function EmployeeDashboard() {
             <button
               onClick={() => setActiveTab("form")}
               className={`px-3 md:px-4 py-2 text-sm border-b-2 ${activeTab === "form"
-                  ? "border-orange-500 text-orange-700"
-                  : "border-transparent text-slate-600 hover:text-slate-800"
+                ? "border-orange-500 text-orange-700"
+                : "border-transparent text-slate-600 hover:text-slate-800"
                 }`}
             >
               Faire une demande
@@ -411,8 +432,8 @@ export default function EmployeeDashboard() {
             <button
               onClick={() => setActiveTab("tickets")}
               className={`px-3 md:px-4 py-2 text-sm border-b-2 ${activeTab === "tickets"
-                  ? "border-blue-500 text-blue-700"
-                  : "border-transparent text-slate-600 hover:text-slate-800"
+                ? "border-blue-500 text-blue-700"
+                : "border-transparent text-slate-600 hover:text-slate-800"
                 }`}
             >
               Mes tickets
@@ -425,8 +446,8 @@ export default function EmployeeDashboard() {
                   setSubordinateTickets([]);
                 }}
                 className={`px-3 md:px-4 py-2 text-sm border-b-2 ${activeTab === "subordinates"
-                    ? "border-green-500 text-green-700"
-                    : "border-transparent text-slate-600 hover:text-slate-800"
+                  ? "border-green-500 text-green-700"
+                  : "border-transparent text-slate-600 hover:text-slate-800"
                   }`}
               >
                 Mon équipe ({subordinates.length})

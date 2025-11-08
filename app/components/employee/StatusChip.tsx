@@ -1,4 +1,4 @@
-import { TicketStatut } from "../../utils/ticketHelpers";
+import { TicketStatut } from "../../dashboard/employee/utils/ticketHelpers";
 
 interface StatusChipProps {
     statut: TicketStatut;

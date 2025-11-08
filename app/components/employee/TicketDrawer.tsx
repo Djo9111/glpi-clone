@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { normalizeTicket } from "../../utils/ticketHelpers";
-import type { Ticket, TicketStatut, PieceJointe, CommentItem } from "../../utils/ticketHelpers";
+import { normalizeTicket } from "../../dashboard/employee/utils/ticketHelpers";
+import type { Ticket, TicketStatut, PieceJointe, CommentItem } from "../../dashboard/employee/utils/ticketHelpers";
 
 interface TicketDrawerProps {
     ticket: Ticket | null;
