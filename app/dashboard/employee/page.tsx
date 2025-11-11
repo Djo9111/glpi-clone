@@ -12,6 +12,29 @@ import type { Ticket, TicketStatut, SubordinateUser, Application, Materiel, Tick
 
 const MAX_FILES = 5;
 
+// ========================================
+// Fonction utilitaire pour décoder correctement les JWT avec UTF-8
+// ========================================
+function decodeJWT(token: string) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+
+    // Décoder en UTF-8 au lieu de Latin-1
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+
+    return JSON.parse(jsonPayload);
+  } catch (error) {
+    console.error("Erreur lors du décodage du JWT:", error);
+    throw error;
+  }
+}
+
 export default function EmployeeDashboard() {
   const router = useRouter();
 
@@ -69,7 +92,7 @@ export default function EmployeeDashboard() {
   const [selected, setSelected] = useState<Ticket | null>(null);
 
   // ————————————————————————————————————————
-  // Auth
+  // Auth avec décodage UTF-8
   // ————————————————————————————————————————
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -78,7 +101,9 @@ export default function EmployeeDashboard() {
       return;
     }
     try {
-      const payload = JSON.parse(atob(token.split(".")[1]));
+      // Utilisation de decodeJWT pour gérer correctement l'UTF-8
+      const payload = decodeJWT(token);
+
       if (payload.role !== "EMPLOYE") {
         alert("Accès refusé !");
         router.push("/login");
