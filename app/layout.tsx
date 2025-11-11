@@ -13,23 +13,19 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GLPI Clone - CDS", // Modifiez selon votre besoin
-  description: "Portail de support technique", // Modifiez selon votre besoin
+  title: "GLPI Clone - CDS",
+  description: "Portail de support technique",
+  // charset UTF-8 est déjà ajouté automatiquement par Next.js
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang="fr"> {/* CORRECTION : "en" → "fr" */}
-      <head>
-        <meta charSet="utf-8" /> {/* AJOUT : Encodage UTF-8 explicite */}
-      </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+    <html lang="fr">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         {children}
       </body>
     </html>

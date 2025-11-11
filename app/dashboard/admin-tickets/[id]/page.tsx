@@ -11,7 +11,7 @@ type Ticket = {
   id: number;
   description: string;
   type: "ASSISTANCE" | "INTERVENTION";
-  statut: "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "REJETE" | "TRANSFERE_mantis" | "CLOSED";
+  statut: "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "REJETE" | "TRANSFERE_MANTIS" | "CLOSED";
   dateCreation: string;
   createdBy: UserMin;
   assignedTo?: UserMin | null;
@@ -189,7 +189,7 @@ export default function TicketDetailPage() {
       IN_PROGRESS: { label: "En cours", className: "bg-blue-100 text-blue-800 border-blue-200" },
       A_CLOTURER: { label: "À clôturer", className: "bg-violet-100 text-violet-800 border-violet-200" },
       REJETE: { label: "Rejeté", className: "bg-rose-100 text-rose-800 border-rose-200" },
-      TRANSFERE_mantis: { label: "Transféré", className: "bg-indigo-100 text-indigo-800 border-indigo-200" },
+      TRANSFERE_MANTIS: { label: "Transféré", className: "bg-indigo-100 text-indigo-800 border-indigo-200" },
       CLOSED: { label: "Clôturé", className: "bg-emerald-100 text-emerald-800 border-emerald-200" },
     };
 
@@ -267,8 +267,8 @@ export default function TicketDetailPage() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-3">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ticket.type === "ASSISTANCE"
-                        ? "bg-blue-100 text-blue-800"
-                        : "bg-purple-100 text-purple-800"
+                      ? "bg-blue-100 text-blue-800"
+                      : "bg-purple-100 text-purple-800"
                       }`}>
                       {ticket.type === "ASSISTANCE" ? "Assistance" : "Intervention"}
                     </span>
@@ -469,7 +469,7 @@ export default function TicketDetailPage() {
                   <option value="IN_PROGRESS">En cours</option>
                   <option value="A_CLOTURER">À clôturer</option>
                   <option value="REJETE">Rejeté</option>
-                  <option value="TRANSFERE_mantis">Transféré mantis</option>
+                  <option value="TRANSFERE_MANTIS">Transféré MANTIS</option>
                   <option value="CLOSED">Clôturé</option>
                 </select>
               </div>
