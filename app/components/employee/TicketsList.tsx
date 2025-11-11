@@ -83,6 +83,8 @@ export default function TicketsList({
                                 <option value="OPEN">Ouverts</option>
                                 <option value="IN_PROGRESS">En cours</option>
                                 <option value="A_CLOTURER">À clôturer</option>
+                                <option value="TRANSFERE_MANTIS">Transféré à Mantis</option>
+                                <option value="REJETE">Rejetés</option>
                                 <option value="CLOSED">Clôturés</option>
                             </select>
 

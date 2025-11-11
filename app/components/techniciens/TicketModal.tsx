@@ -14,8 +14,8 @@ interface TicketModalProps {
 }
 
 export default function TicketModal({ ticket, onClose, onTicketUpdate }: TicketModalProps) {
-    const [manticeNumeroInput, setManticeNumeroInput] = useState<string>(ticket.manticeNumero ?? "");
-    const [showManticeInput, setShowManticeInput] = useState<boolean>(ticket.statut === "TRANSFERE_MANTICE");
+    const [mantisNumeroInput, setMantisNumeroInput] = useState<string>(ticket.mantisNumero ?? "");
+    const [showMantisInput, setShowMantisInput] = useState<boolean>(ticket.statut === "TRANSFERE_MANTIS");
 
     const patchTicket = async (ticketId: number, payload: Record<string, any>) => {
         const token = localStorage.getItem("token");
@@ -30,21 +30,21 @@ export default function TicketModal({ ticket, onClose, onTicketUpdate }: TicketM
     };
 
     const handleStatusChange = async (newStatus: Ticket["statut"]) => {
-        if (newStatus === "TRANSFERE_MANTICE") {
-            setShowManticeInput(true);
-            if (ticket.manticeNumero) {
+        if (newStatus === "TRANSFERE_MANTIS") {
+            setShowMantisInput(true);
+            if (ticket.mantisNumero) {
                 const { ok, data } = await patchTicket(ticket.id, {
-                    statut: "TRANSFERE_MANTICE",
-                    manticeNumero: ticket.manticeNumero
+                    statut: "TRANSFERE_MANTIS",
+                    mantisNumero: ticket.mantisNumero
                 });
                 if (!ok) {
                     alert(data?.error || "Erreur mise à jour du statut");
                     return;
                 }
                 onTicketUpdate(data);
-                alert("Ticket transféré à MANTICE !");
+                alert("Ticket transféré à mantis !");
             } else {
-                alert("Veuillez renseigner le numéro Mantice puis valider.");
+                alert("Veuillez renseigner le numéro mantis puis valider.");
             }
             return;
         }
@@ -58,28 +58,28 @@ export default function TicketModal({ ticket, onClose, onTicketUpdate }: TicketM
         alert("Statut mis à jour !");
     };
 
-    const handleSaveMantice = async () => {
-        const numero = manticeNumeroInput.trim();
+    const handleSaveMantis = async () => {
+        const numero = mantisNumeroInput.trim();
         if (!numero) {
-            alert("Veuillez saisir un numéro Mantice.");
+            alert("Veuillez saisir un numéro mantis.");
             return;
         }
-        const payload = ticket.statut === "TRANSFERE_MANTICE"
-            ? { manticeNumero: numero }
-            : { statut: "TRANSFERE_MANTICE", manticeNumero: numero };
+        const payload = ticket.statut === "TRANSFERE_MANTIS"
+            ? { mantisNumero: numero }
+            : { statut: "TRANSFERE_MANTIS", mantisNumero: numero };
 
         const { ok, data } = await patchTicket(ticket.id, payload);
         if (!ok) {
-            alert(data?.error || "Impossible d'enregistrer le numéro Mantice");
+            alert(data?.error || "Impossible d'enregistrer le numéro mantis");
             return;
         }
         onTicketUpdate(data);
-        alert("Numéro Mantice enregistré !");
-        setShowManticeInput(false);
+        alert("Numéro mantis enregistré !");
+        setShowMantisInput(false);
     };
 
     const StatusOptions: Ticket["statut"][] = [
-        "OPEN", "IN_PROGRESS", "A_CLOTURER", "REJETE", "TRANSFERE_MANTICE", "CLOSED"
+        "OPEN", "IN_PROGRESS", "A_CLOTURER", "REJETE", "TRANSFERE_MANTIS", "CLOSED"
     ];
 
     return (
@@ -129,8 +129,8 @@ export default function TicketModal({ ticket, onClose, onTicketUpdate }: TicketM
                                 {ticket.assignedTo && (
                                     <p>Assigné à: <span className="font-medium">{ticket.assignedTo.prenom} {ticket.assignedTo.nom}</span></p>
                                 )}
-                                {ticket.manticeNumero && (
-                                    <p className="mt-1 text-indigo-700">MANTICE: <span className="font-mono">{ticket.manticeNumero}</span></p>
+                                {ticket.mantisNumero && (
+                                    <p className="mt-1 text-indigo-700">mantis: <span className="font-mono">{ticket.mantisNumero}</span></p>
                                 )}
                             </div>
                         </div>
@@ -153,29 +153,29 @@ export default function TicketModal({ ticket, onClose, onTicketUpdate }: TicketM
                             </select>
                         </div>
 
-                        {/* Mantice input */}
-                        {(showManticeInput || ticket.statut === "TRANSFERE_MANTICE") && (
+                        {/* mantis input */}
+                        {(showMantisInput || ticket.statut === "TRANSFERE_MANTIS") && (
                             <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 space-y-3">
                                 <p className="text-sm font-medium text-indigo-800">
-                                    Numéro MANTICE (obligatoire si "Transféré MANTICE")
+                                    Numéro mantis (obligatoire si "Transféré mantis")
                                 </p>
                                 <input
-                                    value={manticeNumeroInput}
-                                    onChange={(e) => setManticeNumeroInput(e.target.value)}
+                                    value={mantisNumeroInput}
+                                    onChange={(e) => setMantisNumeroInput(e.target.value)}
                                     placeholder="Ex: MNT-2025-000123"
                                     className="w-full border border-indigo-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
                                 />
                                 <div className="flex items-center gap-2">
                                     <button
-                                        onClick={handleSaveMantice}
+                                        onClick={handleSaveMantis}
                                         className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
                                     >
                                         <Send className="h-4 w-4" />
-                                        Valider Mantice
+                                        Valider mantis
                                     </button>
-                                    {ticket.manticeNumero && (
+                                    {ticket.mantisNumero && (
                                         <span className="text-xs text-indigo-700">
-                                            Actuel: <span className="font-mono">{ticket.manticeNumero}</span>
+                                            Actuel: <span className="font-mono">{ticket.mantisNumero}</span>
                                         </span>
                                     )}
                                 </div>
@@ -202,17 +202,17 @@ export default function TicketModal({ ticket, onClose, onTicketUpdate }: TicketM
                                 </button>
                                 <button
                                     onClick={() => {
-                                        setShowManticeInput(true);
-                                        if (!ticket.manticeNumero) {
-                                            alert("Saisissez le numéro Mantice puis cliquez sur 'Valider Mantice'.");
+                                        setShowMantisInput(true);
+                                        if (!ticket.mantisNumero) {
+                                            alert("Saisissez le numéro mantis puis cliquez sur 'Valider mantis'.");
                                         } else {
-                                            handleStatusChange("TRANSFERE_MANTICE");
+                                            handleStatusChange("TRANSFERE_MANTIS");
                                         }
                                     }}
                                     className="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors"
                                 >
                                     <Send className="h-4 w-4" />
-                                    Transférer MANTICE
+                                    Transférer mantis
                                 </button>
                                 <button
                                     onClick={() => handleStatusChange("CLOSED")}

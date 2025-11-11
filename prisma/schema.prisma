@@ -7,59 +7,34 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  EMPLOYE
-  TECHNICIEN
-  CHEF_DSI
-}
-
-enum Statut {
-  OPEN
-  IN_PROGRESS
-  A_CLOTURER
-  REJETE
-  TRANSFERE_MANTICE
-  CLOSED
-}
-
-enum TypeTicket {
-  ASSISTANCE
-  INTERVENTION
-}
-
 model Departement {
   id            Int           @id @default(autoincrement())
   nom           String        @unique
-  employes      Utilisateur[]
-  tickets       Ticket[]
   responsableId Int?
   responsable   Utilisateur?  @relation("DepartementResponsable", fields: [responsableId], references: [id])
+  tickets       Ticket[]
+  employes      Utilisateur[]
 }
 
 model Utilisateur {
-  id            Int          @id @default(autoincrement())
-  nom           String
-  prenom        String
-  email         String       @unique
-  motDePasse    String
-  role          Role         @default(EMPLOYE)
-  matricule     String?      @unique
-  departementId Int?
-  departement   Departement? @relation(fields: [departementId], references: [id])
-
+  id                       Int            @id @default(autoincrement())
+  nom                      String
+  prenom                   String
+  email                    String         @unique
+  motDePasse               String
+  role                     Role           @default(EMPLOYE)
+  matricule                String?        @unique
+  departementId            Int?
+  createdAt                DateTime       @default(now())
   /// Code hiérarchique : 0 = employé simple, 1+ = niveaux de supervision
   /// Plus le code est élevé, plus le niveau hiérarchique est haut
-  codeHierarchique Int @default(0)
-
-  // Relations existantes
-  tickets             Ticket[]       @relation("EmployeTickets")
-  ticketsAssignes     Ticket[]       @relation("TechnicienTickets")
-  notifications       Notification[]
-  createdAt           DateTime       @default(now())
-  commentairesRediges Commentaire[]  @relation("CommentaireAuteur")
-
-  // Relation opposée responsable
-  departementsResponsables Departement[] @relation("DepartementResponsable")
+  codeHierarchique         Int            @default(0)
+  commentairesRediges      Commentaire[]  @relation("CommentaireAuteur")
+  departementsResponsables Departement[]  @relation("DepartementResponsable")
+  notifications            Notification[]
+  ticketsAssignes          Ticket[]       @relation("TechnicienTickets")
+  tickets                  Ticket[]       @relation("EmployeTickets")
+  departement              Departement?   @relation(fields: [departementId], references: [id])
 
   @@index([departementId, codeHierarchique])
 }
@@ -77,49 +52,41 @@ model Materiel {
 }
 
 model Ticket {
-  id           Int        @id @default(autoincrement())
-  description  String
-  dateCreation DateTime   @default(now())
-  statut       Statut     @default(OPEN)
-  type         TypeTicket
-
-  createdById Int
-  createdBy   Utilisateur @relation("EmployeTickets", fields: [createdById], references: [id])
-
-  assignedToId Int?
-  assignedTo   Utilisateur? @relation("TechnicienTickets", fields: [assignedToId], references: [id])
-
-  departementId Int?
-  departement   Departement? @relation(fields: [departementId], references: [id])
-
-  applicationId Int?
-  application   Application? @relation(fields: [applicationId], references: [id])
-
-  materielId Int?
-  materiel   Materiel? @relation(fields: [materielId], references: [id])
-
-  prisEnChargeAt         DateTime?
+  id                     Int            @id @default(autoincrement())
+  description            String
+  dateCreation           DateTime       @default(now())
+  statut                 Statut?        @default(OPEN)
+  type                   TypeTicket
+  createdById            Int
+  assignedToId           Int?
+  departementId          Int?
+  mailSentAt             DateTime?
+  applicationId          Int?
   clotureAt              DateTime?
   dureeTraitementMinutes Int?
-
-  manticeNumero String?
-  manticeAt     DateTime?
-
-  notifications Notification[]
-  piecesJointes PieceJointe[]
-  commentaires  Commentaire[]
-  mailSentAt    DateTime?
+  mantisAt              DateTime?
+  mantisNumero          String?
+  materielId             Int?
+  prisEnChargeAt         DateTime?
+  commentaires           Commentaire[]
+  notifications          Notification[]
+  piecesJointes          PieceJointe[]
+  application            Application?   @relation(fields: [applicationId], references: [id])
+  assignedTo             Utilisateur?   @relation("TechnicienTickets", fields: [assignedToId], references: [id])
+  createdBy              Utilisateur    @relation("EmployeTickets", fields: [createdById], references: [id])
+  departement            Departement?   @relation(fields: [departementId], references: [id])
+  materiel               Materiel?      @relation(fields: [materielId], references: [id])
 }
 
 model Commentaire {
   id        Int         @id @default(autoincrement())
-  contenu   String      @db.Text
+  contenu   String
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
   ticketId  Int
-  ticket    Ticket      @relation(fields: [ticketId], references: [id])
   auteurId  Int
   auteur    Utilisateur @relation("CommentaireAuteur", fields: [auteurId], references: [id])
+  ticket    Ticket      @relation(fields: [ticketId], references: [id])
 
   @@index([ticketId, createdAt])
 }
@@ -129,10 +96,10 @@ model Notification {
   message   String
   dateEnvoi DateTime    @default(now())
   ticketId  Int
-  ticket    Ticket      @relation(fields: [ticketId], references: [id])
-  userId    Int
-  user      Utilisateur @relation(fields: [userId], references: [id])
   isRead    Boolean     @default(false)
+  userId    Int
+  ticket    Ticket      @relation(fields: [ticketId], references: [id])
+  user      Utilisateur @relation(fields: [userId], references: [id])
 }
 
 model PieceJointe {
@@ -142,4 +109,24 @@ model PieceJointe {
   dateAjout  DateTime @default(now())
   ticketId   Int
   ticket     Ticket   @relation(fields: [ticketId], references: [id])
+}
+
+enum Role {
+  EMPLOYE
+  TECHNICIEN
+  CHEF_DSI
+}
+
+enum Statut {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+  A_CLOTURER
+  REJETE
+  TRANSFERE_MANTIS
+}
+
+enum TypeTicket {
+  ASSISTANCE
+  INTERVENTION
 }

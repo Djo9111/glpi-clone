@@ -1,10 +1,10 @@
-export type TicketStatut = "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "CLOSED" | "TRANSFERE_MANTICE";
+export type TicketStatut = "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "CLOSED" | "TRANSFERE_MANTIS" | "REJETE"; // AJOUT DE REJETE
 
 export type Ticket = {
     id: number;
     description: string;
     type: "ASSISTANCE" | "INTERVENTION";
-    statut: TicketStatut;
+    statut: TicketStatut; // Maintenant inclut REJETE
     dateCreation: string;
     assignedTo?: { id: number; prenom: string; nom: string } | null;
     createdBy?: { id: number; prenom: string; nom: string } | null;
@@ -47,9 +47,10 @@ export function normalizeStatus(s: unknown): TicketStatut {
     if (k === "in_progress" || k === "in-progress") return "IN_PROGRESS";
     if (k === "a_cloturer" || k === "a-cloturer" || k === "à_clôturer" || k === "à-clôturer") return "A_CLOTURER";
     if (k === "closed" || k === "close") return "CLOSED";
+    if (k === "rejete" || k === "rejeté") return "REJETE"; // AJOUT DE CETTE LIGNE
 
-    // AJOUT : Gestion du statut TRANSFERE_MANTICE
-    if (k === "transfere_mantice" || k === "transfere" || k === "transféré" || k === "transféré_mantice") return "TRANSFERE_MANTICE";
+    // AJOUT : Gestion du statut TRANSFERE_MANTIS
+    if (k === "transfere_mantis" || k === "transfere" || k === "transféré" || k === "transféré_mantis") return "TRANSFERE_MANTIS";
 
     // Traitement des autres formats
     if (k === "en_attente" || k === "en-attente" || k === "attente" || k === "nouveau") return "OPEN";

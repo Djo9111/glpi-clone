@@ -172,7 +172,7 @@ export default function AdminTicketsDashboard() {
     IN_PROGRESS: tickets.filter((t) => t.statut === "IN_PROGRESS").length,
     A_CLOTURER: tickets.filter((t) => t.statut === "A_CLOTURER").length,
     REJETE: tickets.filter((t) => t.statut === "REJETE").length,
-    TRANSFERE_MANTICE: tickets.filter((t) => t.statut === "TRANSFERE_MANTICE").length,
+    TRANSFERE_mantis: tickets.filter((t) => t.statut === "TRANSFERE_MANTIS").length,
     CLOSED: tickets.filter((t) => t.statut === "CLOSED").length,
   }), [tickets]);
 
@@ -274,11 +274,11 @@ export default function AdminTicketsDashboard() {
           />
           <ClickableStatCard
             label="Transférés"
-            count={stats.TRANSFERE_MANTICE}
+            count={stats.TRANSFERE_mantis}
             icon="Send"
             color="indigo"
-            isActive={statusFilter === "TRANSFERE_MANTICE"}
-            onClick={() => setStatusFilter("TRANSFERE_MANTICE")}
+            isActive={statusFilter === "TRANSFERE_MANTIS"}
+            onClick={() => setStatusFilter("TRANSFERE_MANTIS")}
           />
           <ClickableStatCard
             label="Clôturés"

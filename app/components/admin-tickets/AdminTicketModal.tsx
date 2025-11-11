@@ -25,7 +25,7 @@ export default function AdminTicketModal({
     onTicketUpdate,
 }: AdminTicketModalProps) {
     const StatusOptions: Ticket["statut"][] = [
-        "OPEN", "IN_PROGRESS", "A_CLOTURER", "REJETE", "TRANSFERE_MANTICE", "CLOSED"
+        "OPEN", "IN_PROGRESS", "A_CLOTURER", "REJETE", "TRANSFERE_MANTIS", "CLOSED"
     ];
 
     return (

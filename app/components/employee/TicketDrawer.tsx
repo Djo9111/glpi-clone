@@ -69,14 +69,19 @@ export default function TicketDrawer({
 
     if (!ticket) return null;
 
+    // CORRECTION : Logique de progression mise à jour pour inclure REJETE
     const stepIndex =
-        ticket.statut === "CLOSED" ? 4 :
-            ticket.statut === "A_CLOTURER" ? 3 :
-                ticket.statut === "IN_PROGRESS" ? 2 :
-                    ticket.statut === "TRANSFERE_MANTICE" ? 2 :
-                        ticket.assignedTo ? 1 : 0;
+        ticket.statut === "REJETE" ? 4 : // REJETE placé après CLOSED dans l'ordre visuel
+            ticket.statut === "CLOSED" ? 3 :
+                ticket.statut === "A_CLOTURER" ? 2 :
+                    ticket.statut === "IN_PROGRESS" ? 2 :
+                        ticket.statut === "TRANSFERE_MANTIS" ? 2 :
+                            ticket.assignedTo ? 1 : 0;
 
     const canClose = ticket.statut === "A_CLOTURER";
+
+    // CORRECTION : Étapes de progression mises à jour
+    const progressionSteps = ["Créé", "Assigné", "En cours", "Clôturé", "Rejeté"];
 
     const handleAddComment = async () => {
         const token = localStorage.getItem("token");
@@ -213,10 +218,10 @@ export default function TicketDrawer({
                         <div className="absolute left-4 right-4 h-1 bg-slate-200 rounded-full" />
                         <div
                             className="absolute left-4 h-1 bg-blue-500 rounded-full transition-all"
-                            style={{ width: `calc(${(stepIndex / (4)) * 100}% - 1rem)` }}
+                            style={{ width: `calc(${(stepIndex / (progressionSteps.length - 1)) * 100}% - 1rem)` }}
                         />
                         <div className="w-full flex justify-between">
-                            {["Créé", "Assigné", "En cours", "À clôturer", "Clôturé"].map((lbl, i) => {
+                            {progressionSteps.map((lbl, i) => {
                                 const active = i <= stepIndex;
                                 const current = i === stepIndex;
                                 return (

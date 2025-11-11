@@ -137,8 +137,8 @@ function TicketRow({ ticket, onTicketClick }: { ticket: Ticket; onTicketClick: (
                             {ticket.materiel?.nom && `Mat: ${ticket.materiel.nom}`}
                         </p>
                     )}
-                    {ticket.manticeNumero && (
-                        <p className="text-xs text-indigo-700 mt-1">MANTICE: {ticket.manticeNumero}</p>
+                    {ticket.mantisNumero && (
+                        <p className="text-xs text-indigo-700 mt-1">mantis: {ticket.mantisNumero}</p>
                     )}
                 </div>
             </td>

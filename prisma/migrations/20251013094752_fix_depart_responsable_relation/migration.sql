@@ -11,7 +11,7 @@ CREATE TYPE "Hierarchie" AS ENUM ('EMPLOYE', 'RESPONSABLE_SERVICE', 'CHEF_SERVIC
 
 ALTER TYPE "Statut" ADD VALUE 'A_CLOTURER';
 ALTER TYPE "Statut" ADD VALUE 'REJETE';
-ALTER TYPE "Statut" ADD VALUE 'TRANSFERE_MANTICE';
+ALTER TYPE "Statut" ADD VALUE 'TRANSFERE_mantis';
 
 -- AlterTable
 ALTER TABLE "Departement" ADD COLUMN     "responsableId" INTEGER;
@@ -20,8 +20,8 @@ ALTER TABLE "Departement" ADD COLUMN     "responsableId" INTEGER;
 ALTER TABLE "Ticket" ADD COLUMN     "applicationId" INTEGER,
 ADD COLUMN     "clotureAt" TIMESTAMP(3),
 ADD COLUMN     "dureeTraitementMinutes" INTEGER,
-ADD COLUMN     "manticeAt" TIMESTAMP(3),
-ADD COLUMN     "manticeNumero" TEXT,
+ADD COLUMN     "mantisAt" TIMESTAMP(3),
+ADD COLUMN     "mantisNumero" TEXT,
 ADD COLUMN     "materielId" INTEGER,
 ADD COLUMN     "prisEnChargeAt" TIMESTAMP(3);
 

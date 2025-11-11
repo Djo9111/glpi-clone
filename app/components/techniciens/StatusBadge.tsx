@@ -6,7 +6,7 @@ export function StatusBadge({ status }: { status: Ticket["statut"] }) {
         IN_PROGRESS: { className: "bg-blue-100 text-blue-800" },
         A_CLOTURER: { className: "bg-violet-100 text-violet-800" },
         REJETE: { className: "bg-rose-100 text-rose-800" },
-        TRANSFERE_MANTICE: { className: "bg-indigo-100 text-indigo-800" },
+        TRANSFERE_MANTIS: { className: "bg-indigo-100 text-indigo-800" },
         CLOSED: { className: "bg-emerald-100 text-emerald-800" },
     };
 

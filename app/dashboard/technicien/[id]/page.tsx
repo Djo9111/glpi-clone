@@ -11,14 +11,14 @@ type Ticket = {
   id: number;
   description: string;
   type: "ASSISTANCE" | "INTERVENTION";
-  statut: "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "REJETE" | "TRANSFERE_MANTICE" | "CLOSED";
+  statut: "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "REJETE" | "TRANSFERE_MANTIS" | "CLOSED";
   dateCreation: string;
   createdBy: UserMin;
   assignedTo?: UserMin | null;
   application?: { id: number; nom: string } | null;
   materiel?: { id: number; nom: string } | null;
   departement?: { id: number; nom: string } | null;
-  manticeNumero?: string | null; // ✅ ajouté
+  mantisNumero?: string | null; // ✅ ajouté
 };
 type PieceJointe = { id: number; nomFichier: string; url: string };
 type CommentItem = {
@@ -40,8 +40,8 @@ export default function TechTicketDetail() {
   const [loading, setLoading] = useState(true);
   const [loadingPj, setLoadingPj] = useState(false);
 
-  // ✅ champs Mantice
-  const [manticeNumeroInput, setManticeNumeroInput] = useState<string>("");
+  // ✅ champs mantis
+  const [mantisNumeroInput, setMantisNumeroInput] = useState<string>("");
   // logout
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -73,7 +73,7 @@ export default function TechTicketDetail() {
         return;
       }
       setTicket(data);
-      setManticeNumeroInput(data?.manticeNumero ?? ""); // ✅ init input
+      setMantisNumeroInput(data?.mantisNumero ?? ""); // ✅ init input
     } catch (e) {
       console.error(e);
     } finally {
@@ -123,21 +123,21 @@ export default function TechTicketDetail() {
   };
 
   const handleStatusChange = async (newStatus: Ticket["statut"]) => {
-    if (newStatus === "TRANSFERE_MANTICE") {
+    if (newStatus === "TRANSFERE_MANTIS") {
       // ✅ demander le numéro si manquant
-      let numero = manticeNumeroInput.trim();
+      let numero = mantisNumeroInput.trim();
       if (!numero) {
-        numero = window.prompt("Numéro Mantice requis :", "")?.trim() || "";
+        numero = window.prompt("Numéro mantis requis :", "")?.trim() || "";
       }
       if (!numero) {
-        alert("Numéro Mantice requis pour transférer.");
+        alert("Numéro mantis requis pour transférer.");
         return;
       }
-      const { ok, data } = await patchTicket({ statut: "TRANSFERE_MANTICE", manticeNumero: numero });
+      const { ok, data } = await patchTicket({ statut: "TRANSFER_MANTIS", mantisNumero: numero });
       if (!ok) { alert(data?.error || "Erreur statut"); return; }
       setTicket(data);
-      setManticeNumeroInput(data?.manticeNumero ?? numero);
-      alert("Ticket transféré à MANTICE !");
+      setMantisNumeroInput(data?.mantisNumero ?? numero);
+      alert("Ticket transféré à mantis !");
       return;
     }
 
@@ -147,20 +147,20 @@ export default function TechTicketDetail() {
     alert("Statut mis à jour !");
   };
 
-  const handleSaveMantice = async () => {
-    const numero = manticeNumeroInput.trim();
-    if (!numero) { alert("Veuillez saisir un numéro Mantice."); return; }
+  const handleSavemantis = async () => {
+    const numero = mantisNumeroInput.trim();
+    if (!numero) { alert("Veuillez saisir un numéro mantis."); return; }
     // Si le ticket n'est pas transféré, on transfère en même temps
     const payload =
-      ticket?.statut === "TRANSFERE_MANTICE"
-        ? { manticeNumero: numero }
-        : { statut: "TRANSFERE_MANTICE", manticeNumero: numero };
+      ticket?.statut === "TRANSFERE_MANTIS"
+        ? { mantisNumero: numero }
+        : { statut: "TRANSFERE_MANTIS", mantisNumero: numero };
 
     const { ok, data } = await patchTicket(payload);
-    if (!ok) { alert(data?.error || "Impossible d’enregistrer le numéro Mantice"); return; }
+    if (!ok) { alert(data?.error || "Impossible d’enregistrer le numéro mantis"); return; }
     setTicket(data);
-    setManticeNumeroInput(data?.manticeNumero ?? numero);
-    alert("Numéro Mantice enregistré !");
+    setMantisNumeroInput(data?.mantisNumero ?? numero);
+    alert("Numéro mantis enregistré !");
   };
 
   const handleAddComment = async () => {
@@ -218,7 +218,7 @@ export default function TechTicketDetail() {
       IN_PROGRESS: { label: "En cours", className: "bg-blue-100 text-blue-800 border-blue-200" },
       A_CLOTURER: { label: "À clôturer", className: "bg-violet-100 text-violet-800 border-violet-200" },
       REJETE: { label: "Rejeté", className: "bg-rose-100 text-rose-800 border-rose-200" },
-      TRANSFERE_MANTICE: { label: "Transféré", className: "bg-indigo-100 text-indigo-800 border-indigo-200" },
+      TRANSFERE_MANTIS: { label: "Transféré", className: "bg-indigo-100 text-indigo-800 border-indigo-200" },
       CLOSED: { label: "Clôturé", className: "bg-emerald-100 text-emerald-800 border-emerald-200" },
     };
 
@@ -347,9 +347,9 @@ export default function TechTicketDetail() {
                     Dépt: {ticket.departement.nom}
                   </span>
                 )}
-                {ticket.manticeNumero && (
+                {ticket.mantisNumero && (
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
-                    MANTICE: <span className="ml-1 font-mono">{ticket.manticeNumero}</span>
+                    mantis: <span className="ml-1 font-mono">{ticket.mantisNumero}</span>
                   </span>
                 )}
               </div>
@@ -500,29 +500,29 @@ export default function TechTicketDetail() {
                   <option value="IN_PROGRESS">En cours</option>
                   <option value="A_CLOTURER">À clôturer</option>
                   <option value="REJETE">Rejeté</option>
-                  <option value="TRANSFERE_MANTICE">Transféré MANTICE</option>
+                  <option value="TRANSFERE_mantis">Transféré mantis</option>
                   <option value="CLOSED">Clôturé</option>
                 </select>
               </div>
 
-              {/* Section Mantice dans la sidebar */}
+              {/* Section mantis dans la sidebar */}
               <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 space-y-3">
                 <p className="text-sm font-medium text-indigo-800">
-                  Numéro MANTICE {ticket.statut === "TRANSFERE_MANTICE" ? "(obligatoire)" : "(optionnel)"}
+                  Numéro mantis {ticket.statut === "TRANSFERE_MANTIS" ? "(obligatoire)" : "(optionnel)"}
                 </p>
                 <input
-                  value={manticeNumeroInput}
-                  onChange={(e) => setManticeNumeroInput(e.target.value)}
+                  value={mantisNumeroInput}
+                  onChange={(e) => setMantisNumeroInput(e.target.value)}
                   placeholder="Ex: MNT-2025-000123"
                   className="w-full border border-indigo-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
                 />
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={handleSaveMantice}
+                    onClick={handleSavemantis}
                     className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
                   >
                     <Send className="h-4 w-4" />
-                    {ticket.statut === "TRANSFERE_MANTICE" ? "Mettre à jour" : "Transférer + Enregistrer"}
+                    {ticket.statut === "TRANSFERE_MANTIS" ? "Mettre à jour" : "Transférer + Enregistrer"}
                   </button>
                 </div>
               </div>

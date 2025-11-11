@@ -8,7 +8,7 @@ import { BarChart3, Building2, AppWindow, UserRound, Clock, TrendingUp, AlertCir
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
 type Role = "EMPLOYE" | "TECHNICIEN" | "CHEF_DSI";
-type StatusKey = "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "REJETE" | "TRANSFERE_MANTICE" | "CLOSED";
+type StatusKey = "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "REJETE" | "TRANSFERE_MANTIS" | "CLOSED";
 
 type TopItem = { id: number | string; nom?: string; nomComplet?: string; count: number };
 
@@ -230,8 +230,8 @@ export default function ReportingDashboard() {
                   <button
                     onClick={() => setViewMode("daily")}
                     className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${viewMode === "daily"
-                        ? "bg-indigo-600 text-white shadow"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      ? "bg-indigo-600 text-white shadow"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                       }`}
                   >
                     Journalier
@@ -239,8 +239,8 @@ export default function ReportingDashboard() {
                   <button
                     onClick={() => setViewMode("weekly")}
                     className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${viewMode === "weekly"
-                        ? "bg-indigo-600 text-white shadow"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      ? "bg-indigo-600 text-white shadow"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                       }`}
                   >
                     Hebdomadaire
@@ -510,7 +510,7 @@ function getStatusConfig(status: StatusKey) {
         barColor: "bg-red-500",
         bgLight: "bg-red-50"
       };
-    case "TRANSFERE_MANTICE":
+    case "TRANSFERE_MANTIS":
       return {
         icon: <TrendingUp className="h-4 w-4 text-purple-600" />,
         barColor: "bg-purple-500",
@@ -531,7 +531,7 @@ function statusLabel(s: StatusKey) {
     case "IN_PROGRESS": return "En cours";
     case "A_CLOTURER": return "À clôturer";
     case "REJETE": return "Rejeté";
-    case "TRANSFERE_MANTICE": return "Transféré MANTICE";
+    case "TRANSFERE_MANTIS": return "Transféré mantis";
     case "CLOSED": return "Clôturé";
     default: return s;
   }

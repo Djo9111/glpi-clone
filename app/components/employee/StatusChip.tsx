@@ -10,7 +10,8 @@ export default function StatusChip({ statut }: StatusChipProps) {
         IN_PROGRESS: { label: "En cours", cls: "bg-blue-50 text-blue-700 border-blue-300", icon: "" },
         A_CLOTURER: { label: "À clôturer", cls: "bg-violet-50 text-violet-700 border-violet-300", icon: "" },
         CLOSED: { label: "Clôturé", cls: "bg-emerald-50 text-emerald-700 border-emerald-300", icon: "" },
-        TRANSFERE_MANTICE: { label: "Transféré à Mantice", cls: "bg-orange-50 text-orange-700 border-orange-300", icon: "" },
+        TRANSFERE_MANTIS: { label: "Transféré à MANTIS", cls: "bg-orange-50 text-orange-700 border-orange-300", icon: "" },
+        REJETE: { label: "Rejeté", cls: "bg-red-50 text-red-700 border-red-300", icon: "" }, // AJOUT DE CETTE LIGNE
     } as const;
 
     const s = map[statut];

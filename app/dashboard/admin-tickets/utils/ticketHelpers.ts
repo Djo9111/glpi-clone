@@ -2,7 +2,7 @@ export type Ticket = {
     id: number;
     description: string;
     type: "ASSISTANCE" | "INTERVENTION";
-    statut: "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "REJETE" | "TRANSFERE_MANTICE" | "CLOSED";
+    statut: "OPEN" | "IN_PROGRESS" | "A_CLOTURER" | "REJETE" | "TRANSFERE_MANTIS" | "CLOSED"; // CORRIGÉ
     createdBy: { id: number; prenom: string; nom: string };
     assignedTo?: { id: number; prenom: string; nom: string } | null;
     application?: { id: number; nom: string } | null;
@@ -18,7 +18,7 @@ export function statusLabel(s: Ticket["statut"]): string {
         case "IN_PROGRESS": return "En cours";
         case "A_CLOTURER": return "À clôturer";
         case "REJETE": return "Rejeté";
-        case "TRANSFERE_MANTICE": return "Transféré MANTICE";
+        case "TRANSFERE_MANTIS": return "Transféré MANTIS"; // CORRIGÉ
         case "CLOSED": return "Clôturé";
         default: return String(s);
     }
@@ -31,7 +31,7 @@ export function normalizeStatus(s: unknown): Ticket["statut"] {
     if (k === "in_progress" || k === "in-progress") return "IN_PROGRESS";
     if (k === "a_cloturer" || k === "a-cloturer" || k === "à_clôturer" || k === "à-clôturer") return "A_CLOTURER";
     if (k === "rejete" || k === "rejeté") return "REJETE";
-    if (k === "transfere_mantice" || k === "transfère_mantice" || k === "transfere-mantice") return "TRANSFERE_MANTICE";
+    if (k === "transfere_mantis" || k === "transfère_mantis" || k === "transfere-mantis") return "TRANSFERE_MANTIS"; // CORRIGÉ
     if (k === "closed" || k === "close") return "CLOSED";
     if (k === "en_attente" || k === "en-attente" || k === "attente" || k === "nouveau") return "OPEN";
     if (k === "en_cours" || k === "en-cours" || k === "traitement") return "IN_PROGRESS";
