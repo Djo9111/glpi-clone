@@ -1,8 +1,27 @@
+// app/login/page.tsx
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+
+// Fonction pour décoder le JWT (identique à celle du dashboard employé)
+function decodeJWT(token: string) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (error) {
+    console.error("Erreur lors du décodage du JWT:", error);
+    throw error;
+  }
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -12,7 +31,6 @@ export default function LoginPage() {
   const [errorMsg, setErrorMsg] = useState("");
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-
     e.preventDefault();
     if (loading) return;
 
@@ -35,10 +53,22 @@ export default function LoginPage() {
       }
 
       localStorage.setItem("token", data.token);
+
+      // Décoder le token pour vérifier le code hiérarchique
+      const payload = decodeJWT(data.token);
       const role = data.user.role;
-      if (role === "CHEF_DSI") router.push("/dashboard/admin-tickets");
-      else if (role === "EMPLOYE") router.push("/dashboard/employee");
-      else if (role === "TECHNICIEN") router.push("/dashboard/technicien");
+      const codeHierarchique = payload.codeHierarchique;
+
+      // Redirection selon le rôle ET le code hiérarchique
+      if (role === "CHEF_DSI") {
+        router.push("/dashboard/admin-tickets");
+      } else if (role === "EMPLOYE" && codeHierarchique === 99) {
+        router.push("/dashboard/dg");
+      } else if (role === "EMPLOYE") {
+        router.push("/dashboard/employee");
+      } else if (role === "TECHNICIEN") {
+        router.push("/dashboard/technicien");
+      }
     } catch (err) {
       console.error(err);
       setErrorMsg("Erreur lors de la connexion. Réessayez.");
@@ -122,18 +152,6 @@ export default function LoginPage() {
                 </span>
               )}
             </button>
-
-            {/*
-                <div className="flex items-center justify-between text-sm pt-3 border-t border-slate-100">
-                  <a href="/register" className="text-blue-600 hover:underline font-medium">
-                    Créer un compte
-                  </a>
-                  <a href="/forgot" className="text-slate-500 hover:underline">
-                    Mot de passe oublié
-                  </a>
-                </div>
-          */}
-
           </form>
         </div>
 

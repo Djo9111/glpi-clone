@@ -43,7 +43,16 @@ export default function ReportingDashboard() {
     if (!token) { router.push("/login"); return; }
     try {
       const payload = JSON.parse(atob(token.split(".")[1]));
-      if (payload.role !== "CHEF_DSI") { alert("Accès refusé !"); router.push("/login"); return; }
+
+      // Autoriser CHEF_DSI OU DG (code hiérarchique 99)
+      const isAuthorized = payload.role === "CHEF_DSI" || payload.codeHierarchique === 99;
+
+      if (!isAuthorized) {
+        alert("Accès refusé !");
+        router.push("/login");
+        return;
+      }
+
       setUser({ id: payload.id, role: payload.role });
     } catch { router.push("/login"); }
   }, [router]);
@@ -133,12 +142,15 @@ export default function ReportingDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Link
-              href="/dashboard/admin-entities"
-              className="px-4 py-2.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors shadow-sm font-medium"
-            >
-              Gestion des ressources
-            </Link>
+            {/* Afficher seulement si c'est le Chef DSI */}
+            {user?.role === "CHEF_DSI" && (
+              <Link
+                href="/dashboard/admin-entities"
+                className="px-4 py-2.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors shadow-sm font-medium"
+              >
+                Gestion des ressources
+              </Link>
+            )}
             <button
               onClick={handleLogout}
               disabled={loggingOut}

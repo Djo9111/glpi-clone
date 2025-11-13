@@ -29,7 +29,7 @@ const ADMIN_BASE_URL = process.env.ADMIN_BASE_URL || "https://ton-domaine/admin"
 // ——— réglages upload ———
 const MAX_FILES = 5;
 const MAX_SIZE = 10 * 1024 * 1024; // 10 Mo
-const ALLOWED_EXT = new Set(["pdf","png","jpg","jpeg","txt","log","doc","docx","xlsx","csv"]);
+const ALLOWED_EXT = new Set(["pdf", "png", "jpg", "jpeg", "txt", "log", "doc", "docx", "xlsx", "csv"]);
 
 // Limite prudente pour pièces jointes Gmail (~25 Mo)
 const MAX_ATTACH_TOTAL = 25 * 1024 * 1024;
@@ -38,13 +38,13 @@ const MAX_ATTACH_TOTAL = 25 * 1024 * 1024;
 function getUserFromRequest(request: Request) {
   const token = request.headers.get("Authorization")?.replace("Bearer ", "");
   if (!token) return null;
-  try { 
-    return jwt.verify(token, JWT_SECRET) as { 
-      id: number; 
+  try {
+    return jwt.verify(token, JWT_SECRET) as {
+      id: number;
       role: string;
       codeHierarchique: number;
       departementId: number | null;
-    }; 
+    };
   }
   catch { return null; }
 }
@@ -74,14 +74,14 @@ function ticketHtml(params: {
   const pj = (params.pieceUrls && params.pieceUrls.length)
     ? `<ul>${params.pieceUrls.map(u => `<li><a href="${u}">${u}</a></li>`).join("")}</ul>`
     : "<i>Aucune</i>";
-  const auteur = `${escapeHtml(params.createdBy.prenom)} ${escapeHtml(params.createdBy.nom)}${params.createdBy.email ? " ("+escapeHtml(params.createdBy.email)+")" : ""}`;
+  const auteur = `${escapeHtml(params.createdBy.prenom)} ${escapeHtml(params.createdBy.nom)}${params.createdBy.email ? " (" + escapeHtml(params.createdBy.email) + ")" : ""}`;
 
   const extra =
     params.type === "ASSISTANCE" && params.appName
       ? `<p><b>Application :</b> ${escapeHtml(params.appName)}</p>`
       : params.type === "INTERVENTION" && params.matName
-      ? `<p><b>Matériel :</b> ${escapeHtml(params.matName)}</p>`
-      : "";
+        ? `<p><b>Matériel :</b> ${escapeHtml(params.matName)}</p>`
+        : "";
 
   return `
     <div style="font-family:system-ui,Segoe UI,Arial;line-height:1.5">
@@ -163,23 +163,32 @@ async function sendNewTicketEmails(ticket: any, pieceUrls: string[] = []) {
 /* ---------------------------------------------------------------------------------- */
 /* GET: récupérer les tickets visibles selon le cloisonnement hiérarchique            */
 /* ---------------------------------------------------------------------------------- */
+// Dans la fonction GET, modifiez cette partie :
 export async function GET(request: Request) {
   try {
     const payload = getUserFromRequest(request);
     if (!payload) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
     const url = new URL(request.url);
-    const userId = url.searchParams.get("userId"); // pour voir les tickets d'un utilisateur spécifique
+    const userId = url.searchParams.get("userId");
 
     let tickets;
 
-    // CHEF_DSI voit TOUS les tickets
-    if (payload.role === "CHEF_DSI") {
+    // CHEF_DSI ou DG (code 99) voit TOUS les tickets
+    if (payload.role === "CHEF_DSI" || payload.codeHierarchique === 99) {
       const whereClause = userId ? { createdById: Number(userId) } : {};
       tickets = await prisma.ticket.findMany({
         where: whereClause,
         include: {
-          createdBy: { select: { id: true, nom: true, prenom: true, email: true } },
+          createdBy: {
+            select: {
+              id: true,
+              nom: true,
+              prenom: true,
+              email: true,
+              departement: { select: { id: true, nom: true } }
+            }
+          },
           assignedTo: { select: { id: true, nom: true, prenom: true } },
           departement: { select: { id: true, nom: true } },
           application: { select: { id: true, nom: true } },
@@ -187,7 +196,7 @@ export async function GET(request: Request) {
         },
         orderBy: { dateCreation: "desc" },
       });
-    } 
+    }
     // TECHNICIEN voit ses tickets assignés + ses propres tickets
     else if (payload.role === "TECHNICIEN") {
       tickets = await prisma.ticket.findMany({
@@ -198,7 +207,15 @@ export async function GET(request: Request) {
           ],
         },
         include: {
-          createdBy: { select: { id: true, nom: true, prenom: true, email: true } },
+          createdBy: {
+            select: {
+              id: true,
+              nom: true,
+              prenom: true,
+              email: true,
+              departement: { select: { id: true, nom: true } }
+            }
+          },
           assignedTo: { select: { id: true, nom: true, prenom: true } },
           departement: { select: { id: true, nom: true } },
           application: { select: { id: true, nom: true } },
@@ -237,9 +254,9 @@ export async function GET(request: Request) {
 
         // droits de visibilité
         if (targetUserId !== payload.id) {
-          if (!targetUser || 
-              targetUser.departementId !== payload.departementId ||
-              targetUser.codeHierarchique >= payload.codeHierarchique) {
+          if (!targetUser ||
+            targetUser.departementId !== payload.departementId ||
+            targetUser.codeHierarchique >= payload.codeHierarchique) {
             return NextResponse.json({ error: "Accès refusé à ces tickets" }, { status: 403 });
           }
         }
@@ -247,7 +264,15 @@ export async function GET(request: Request) {
         tickets = await prisma.ticket.findMany({
           where: { createdById: targetUserId },
           include: {
-            createdBy: { select: { id: true, nom: true, prenom: true, email: true } },
+            createdBy: {
+              select: {
+                id: true,
+                nom: true,
+                prenom: true,
+                email: true,
+                departement: { select: { id: true, nom: true } }
+              }
+            },
             assignedTo: { select: { id: true, nom: true, prenom: true } },
             departement: { select: { id: true, nom: true } },
             application: { select: { id: true, nom: true } },
@@ -259,7 +284,15 @@ export async function GET(request: Request) {
         tickets = await prisma.ticket.findMany({
           where: { OR: conditions },
           include: {
-            createdBy: { select: { id: true, nom: true, prenom: true, email: true } },
+            createdBy: {
+              select: {
+                id: true,
+                nom: true,
+                prenom: true,
+                email: true,
+                departement: { select: { id: true, nom: true } }
+              }
+            },
             assignedTo: { select: { id: true, nom: true, prenom: true } },
             departement: { select: { id: true, nom: true } },
             application: { select: { id: true, nom: true } },
