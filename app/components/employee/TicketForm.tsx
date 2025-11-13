@@ -66,7 +66,7 @@ export default function TicketForm({
             <div className="grid gap-2 mb-3">
                 {ticketForm.typeTicket === "ASSISTANCE" && (
                     <>
-                        <label className="text-xs font-medium text-slate-700">Application (optionnel)</label>
+                        <label className="text-xs font-medium text-slate-700">Application</label>
                         <select
                             name="applicationId"
                             value={ticketForm.applicationId ?? ""}
