@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { statusLabel, type Ticket } from "@/app/dashboard/technicien/utils/ticketHelpers";
 import { StatusBadge } from "./StatusBadge";
 import { Eye } from "lucide-react";
@@ -16,6 +17,17 @@ interface TicketsTableProps {
     onTicketClick: (ticket: Ticket) => void;
 }
 
+function formatDate(dateString?: string): string {
+    if (!dateString) return "";
+    const d = new Date(dateString);
+    if (Number.isNaN(d.getTime())) return dateString;
+    return d.toLocaleDateString("fr-FR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+    });
+}
+
 export default function TicketsTable({
     tickets,
     loading,
@@ -27,60 +39,196 @@ export default function TicketsTable({
     onPageChange,
     onTicketClick,
 }: TicketsTableProps) {
-    const totalPages = Math.max(1, Math.ceil(tickets.length / pageSize));
-    const paginatedTickets = tickets.slice((page - 1) * pageSize, page * pageSize);
+    const [search, setSearch] = useState("");
+    const [dateFrom, setDateFrom] = useState("");
+    const [dateTo, setDateTo] = useState("");
+
+    const filteredTickets = useMemo(() => {
+        const normalizedSearch = search.trim().toLowerCase();
+
+        return tickets.filter((ticket) => {
+            // ---- Recherche globale ----
+            if (normalizedSearch) {
+                const idStr = String(ticket.id);
+                const creatorIdStr = String(ticket.createdBy?.id ?? "");
+                const description = (ticket.description ?? "").toLowerCase();
+                const creatorName = `${ticket.createdBy?.prenom ?? ""} ${ticket.createdBy?.nom ?? ""}`.toLowerCase();
+                const mantis = (ticket.mantisNumero ?? "").toLowerCase();
+                const dateStr = ticket.dateCreation
+                    ? new Date(ticket.dateCreation).toLocaleDateString("fr-FR").toLowerCase()
+                    : "";
+                const dateRaw = (ticket.dateCreation ?? "").toLowerCase();
+
+                const matchesSearch =
+                    idStr.includes(normalizedSearch) ||
+                    creatorIdStr.includes(normalizedSearch) ||
+                    description.includes(normalizedSearch) ||
+                    creatorName.includes(normalizedSearch) ||
+                    mantis.includes(normalizedSearch) ||
+                    dateStr.includes(normalizedSearch) ||
+                    dateRaw.includes(normalizedSearch);
+
+                if (!matchesSearch) return false;
+            }
+
+            // ---- Filtre de dates ----
+            if (!dateFrom && !dateTo) return true;
+
+            if (!ticket.dateCreation) return false;
+            const d = new Date(ticket.dateCreation);
+            if (Number.isNaN(d.getTime())) return false;
+
+            if (dateFrom) {
+                const from = new Date(dateFrom + "T00:00:00");
+                if (d < from) return false;
+            }
+            if (dateTo) {
+                const to = new Date(dateTo + "T23:59:59");
+                if (d > to) return false;
+            }
+
+            return true;
+        });
+    }, [tickets, search, dateFrom, dateTo]);
+
+    // Reset page quand on change les filtres
+    useEffect(() => {
+        onPageChange(1);
+    }, [search, dateFrom, dateTo, onPageChange]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredTickets.length / pageSize));
+    const paginatedTickets = filteredTickets.slice((page - 1) * pageSize, page * pageSize);
 
     return (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-            {/* Header */}
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+            {/* Header + recherche + filtres */}
+            <div className="px-6 py-4 border-b border-slate-200 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                     <h2 className="text-base font-semibold text-slate-900">Tous mes tickets</h2>
                     <p className="text-sm text-slate-500 mt-1">
-                        {statusFilter === "ALL" ? totalTickets : tickets.length} ticket{
-                            (statusFilter === "ALL" ? totalTickets : tickets.length) > 1 ? "s" : ""
-                        } {statusFilter !== "ALL" ? `(${statusLabel(statusFilter)})` : ""}
+                        {filteredTickets.length} ticket
+                        {filteredTickets.length > 1 ? "s" : ""} trouvé
+                        {filteredTickets.length > 1 ? "s" : ""}{" "}
+                        {statusFilter !== "ALL" ? `(${statusLabel(statusFilter)})` : ""}
+                        {statusFilter === "ALL" && (
+                            <> • {totalTickets} assigné(s) au total</>
+                        )}
                     </p>
                 </div>
-                <div className="flex items-center gap-2 text-sm">
-                    <span className="text-slate-600">Afficher</span>
-                    <select
-                        value={pageSize}
-                        onChange={(e) => {
-                            onPageSizeChange(Number(e.target.value));
-                            onPageChange(1);
-                        }}
-                        className="border border-slate-300 rounded-lg px-2 py-1 bg-white"
-                    >
-                        <option value={5}>5</option>
-                        <option value={10}>10</option>
-                        <option value={20}>20</option>
-                        <option value={50}>50</option>
-                    </select>
-                    <span className="text-slate-600">par page</span>
+
+                <div className="flex flex-col gap-2 md:items-end md:flex-1 md:ml-4">
+                    {/* Ligne recherche + dates */}
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end w-full">
+                        {/* Recherche globale */}
+                        <div className="relative w-full sm:w-64">
+                            <svg
+                                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                                />
+                            </svg>
+                            <input
+                                type="search"
+                                placeholder="ID, créateur, description, date, mantis..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                className="pl-9 pr-3 py-2 rounded-lg border border-slate-300 bg-white text-sm w-full focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
+                            />
+                        </div>
+
+                        {/* Filtre date (du / au) */}
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="date"
+                                value={dateFrom}
+                                onChange={(e) => setDateFrom(e.target.value)}
+                                className="px-2 py-2 rounded-lg border border-slate-300 bg-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
+                            />
+                            <span className="text-xs text-slate-500">au</span>
+                            <input
+                                type="date"
+                                value={dateTo}
+                                onChange={(e) => setDateTo(e.target.value)}
+                                className="px-2 py-2 rounded-lg border border-slate-300 bg-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Sélecteur pageSize */}
+                    <div className="flex items-center gap-2 text-sm">
+                        <span className="text-slate-600">Afficher</span>
+                        <select
+                            value={pageSize}
+                            onChange={(e) => {
+                                onPageSizeChange(Number(e.target.value));
+                                onPageChange(1);
+                            }}
+                            className="border border-slate-300 rounded-lg px-2 py-1 bg-white"
+                        >
+                            <option value={5}>5</option>
+                            <option value={10}>10</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                        </select>
+                        <span className="text-slate-600">par page</span>
+                    </div>
                 </div>
             </div>
 
             {/* Table */}
-            <div className="flex-1 overflow-x-auto">
+            <div className="flex-1 overflow-x-auto relative">
+                {loading && (
+                    <div className="absolute inset-0 bg-white/60 flex items-center justify-center z-10">
+                        <div className="flex items-center gap-2 text-slate-600 text-sm">
+                            <div className="h-4 w-4 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
+                            Chargement de vos tickets...
+                        </div>
+                    </div>
+                )}
+
                 <table className="w-full">
-                    <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
+                    <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-0">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">ID</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">Description</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">Type</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">Statut</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">Créé par</th>
-                            <th className="px-6 py-3 text-right text-xs font-medium text-slate-600 uppercase tracking-wider">Actions</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
+                                ID
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
+                                Description
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
+                                Type
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
+                                Créé le
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
+                                Statut
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
+                                Créé par
+                            </th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-slate-600 uppercase tracking-wider">
+                                Actions
+                            </th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                        {tickets.length === 0 && (
+                        {filteredTickets.length === 0 && !loading && (
                             <tr>
-                                <td colSpan={6} className="px-6 py-8 text-center text-sm text-slate-500">
+                                <td
+                                    colSpan={7}
+                                    className="px-6 py-8 text-center text-sm text-slate-500"
+                                >
                                     {statusFilter === "ALL"
-                                        ? "Aucun ticket assigné"
-                                        : `Aucun ticket ${statusLabel(statusFilter).toLowerCase()}`}
+                                        ? "Aucun ticket assigné ne correspond à vos critères."
+                                        : `Aucun ticket ${statusLabel(statusFilter).toLowerCase()} ne correspond à vos critères.`}
                                 </td>
                             </tr>
                         )}
@@ -92,10 +240,11 @@ export default function TicketsTable({
             </div>
 
             {/* Pagination */}
-            {tickets.length > 0 && (
+            {filteredTickets.length > 0 && (
                 <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
                     <span className="text-sm text-slate-600">
-                        Page {page} / {totalPages} • {tickets.length} ticket{tickets.length > 1 ? "s" : ""}
+                        Page {page} / {totalPages} • {filteredTickets.length} ticket
+                        {filteredTickets.length > 1 ? "s" : ""}
                     </span>
                     <div className="flex items-center gap-2">
                         <button
@@ -121,7 +270,7 @@ export default function TicketsTable({
 
 function TicketRow({ ticket, onTicketClick }: { ticket: Ticket; onTicketClick: (ticket: Ticket) => void }) {
     return (
-        <tr key={ticket.id} className="hover:bg-slate-50 transition-colors">
+        <tr className="hover:bg-slate-50 transition-colors">
             <td className="px-6 py-4 whitespace-nowrap">
                 <span className="text-sm font-mono font-medium text-slate-900">#{ticket.id}</span>
             </td>
@@ -138,22 +287,34 @@ function TicketRow({ ticket, onTicketClick }: { ticket: Ticket; onTicketClick: (
                         </p>
                     )}
                     {ticket.mantisNumero && (
-                        <p className="text-xs text-indigo-700 mt-1">mantis: {ticket.mantisNumero}</p>
+                        <p className="text-xs text-indigo-700 mt-1">MANTIS : {ticket.mantisNumero}</p>
                     )}
                 </div>
             </td>
             <td className="px-6 py-4 whitespace-nowrap">
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ticket.type === "ASSISTANCE" ? "bg-blue-100 text-blue-800" : "bg-purple-100 text-purple-800"
-                    }`}>
+                <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ticket.type === "ASSISTANCE"
+                            ? "bg-blue-100 text-blue-800"
+                            : "bg-purple-100 text-purple-800"
+                        }`}
+                >
                     {ticket.type === "ASSISTANCE" ? "Assistance" : "Intervention"}
                 </span>
+            </td>
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
+                {ticket.dateCreation ? (
+                    formatDate(ticket.dateCreation)
+                ) : (
+                    <span className="text-slate-400 italic">—</span>
+                )}
             </td>
             <td className="px-6 py-4 whitespace-nowrap">
                 <StatusBadge status={ticket.statut} />
             </td>
             <td className="px-6 py-4 whitespace-nowrap">
                 <span className="text-sm text-slate-700">
-                    {ticket.createdBy.prenom} {ticket.createdBy.nom}
+                    {ticket.createdBy.prenom} {ticket.createdBy.nom}{" "}
+                    <span className="text-xs text-slate-400">({ticket.createdBy.id})</span>
                 </span>
             </td>
             <td className="px-6 py-4 whitespace-nowrap text-right">

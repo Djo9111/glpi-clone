@@ -85,7 +85,7 @@ export default function TicketForm({
                 )}
                 {ticketForm.typeTicket === "INTERVENTION" && (
                     <>
-                        <label className="text-xs font-medium text-slate-700">Matériel (optionnel)</label>
+                        <label className="text-xs font-medium text-slate-700">Matériel</label>
                         <select
                             name="materielId"
                             value={ticketForm.materielId ?? ""}

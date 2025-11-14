@@ -9,7 +9,7 @@ import TeamSection from "../../components/employee/TeamSection";
 import TicketDrawer from "../../components/employee/TicketDrawer";
 import { normalizeTicket, normalizeStatus } from "./utils/ticketHelpers";
 import type { Ticket, TicketStatut, SubordinateUser, Application, Materiel, TicketForm as TicketFormType } from "./utils/ticketHelpers";
-
+import toast from "react-hot-toast";
 const MAX_FILES = 5;
 
 // ========================================

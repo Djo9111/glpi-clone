@@ -1,3 +1,5 @@
+// "@/app/dashboard/admin-tickets/utils/ticketHelpers.ts"
+
 export type Ticket = {
     id: number;
     description: string;
@@ -7,6 +9,10 @@ export type Ticket = {
     assignedTo?: { id: number; prenom: string; nom: string } | null;
     application?: { id: number; nom: string } | null;
     materiel?: { id: number; nom: string } | null;
+    /**
+     * Date de création du ticket (ISO string ou autre format compatible avec new Date())
+     */
+    dateCreation?: string;
 };
 
 export type Technicien = { id: number; prenom: string; nom: string };
@@ -63,5 +69,13 @@ export function normalizeTicket(raw: any): Ticket {
         materiel: raw.materiel
             ? { id: Number(raw.materiel.id), nom: String(raw.materiel.nom ?? "") }
             : null,
+        // Tentative intelligente sur plusieurs noms possibles côté API
+        dateCreation: raw.dateCreation
+            ? String(raw.dateCreation)
+            : raw.createdAt
+                ? String(raw.createdAt)
+                : raw.created_at
+                    ? String(raw.created_at)
+                    : undefined,
     };
 }
