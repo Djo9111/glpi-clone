@@ -100,25 +100,42 @@ export default function AdminTicketsTable({
     return (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
             {/* Header avec recherche & filtres */}
-            <div className="px-6 py-4 border-b border-slate-200 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                    <h2 className="text-base font-semibold text-slate-900">Tous les tickets</h2>
-                    <p className="text-sm text-slate-500 mt-1">
-                        {filteredTickets.length} ticket
-                        {filteredTickets.length > 1 ? "s" : ""} trouvé
-                        {filteredTickets.length > 1 ? "s" : ""}{" "}
-                        {statusFilter !== "ALL" ? `(${statusLabel(statusFilter)})` : ""}
-                        {statusFilter === "ALL" && (
-                            <> • {totalTickets} au total</>
-                        )}
-                    </p>
-                </div>
+            <div className="px-6 py-4 border-b border-slate-200">
+                <div className="flex flex-col gap-4">
+                    {/* Titre et compteur */}
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h2 className="text-base font-semibold text-slate-900">Tous les tickets</h2>
+                            <p className="text-sm text-slate-500 mt-1">
+                                {filteredTickets.length} ticket
+                                {filteredTickets.length > 1 ? "s" : ""} trouvé
+                                {filteredTickets.length > 1 ? "s" : ""}{" "}
+                                {statusFilter !== "ALL" ? `(${statusLabel(statusFilter)})` : ""}
+                                {statusFilter === "ALL" && (
+                                    <> • {totalTickets} au total</>
+                                )}
+                            </p>
+                        </div>
 
-                <div className="flex flex-col gap-2 md:items-end md:flex-1 md:ml-4">
-                    {/* Ligne recherche + dates */}
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end w-full">
+                        {/* Bouton reset des filtres */}
+                        {(search || dateFrom || dateTo) && (
+                            <button
+                                onClick={() => {
+                                    setSearch("");
+                                    setDateFrom("");
+                                    setDateTo("");
+                                }}
+                                className="text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
+                            >
+                                Réinitialiser
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Barre de recherche et filtres */}
+                    <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
                         {/* Recherche globale */}
-                        <div className="relative w-full sm:w-64">
+                        <div className="relative flex-1 max-w-md">
                             <svg
                                 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
                                 fill="none"
@@ -134,48 +151,66 @@ export default function AdminTicketsTable({
                             </svg>
                             <input
                                 type="search"
-                                placeholder="ID ticket, ID créateur, description, date..."
+                                placeholder="Rechercher par ID, créateur, description..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                className="pl-9 pr-3 py-2 rounded-lg border border-slate-300 bg-white text-sm w-full focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
+                                className="pl-9 pr-3 py-2.5 rounded-lg border border-slate-300 bg-white text-sm w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
                             />
+                            {search && (
+                                <button
+                                    onClick={() => setSearch("")}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            )}
                         </div>
 
-                        {/* Filtre date (du / au) */}
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="date"
-                                value={dateFrom}
-                                onChange={(e) => setDateFrom(e.target.value)}
-                                className="px-2 py-2 rounded-lg border border-slate-300 bg-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
-                            />
-                            <span className="text-xs text-slate-500">au</span>
-                            <input
-                                type="date"
-                                value={dateTo}
-                                onChange={(e) => setDateTo(e.target.value)}
-                                className="px-2 py-2 rounded-lg border border-slate-300 bg-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
-                            />
-                        </div>
-                    </div>
+                        {/* Filtres date et pagination */}
+                        <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                            {/* Filtre date (du / au) */}
+                            <div className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2 border border-slate-200">
+                                <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <input
+                                    type="date"
+                                    value={dateFrom}
+                                    onChange={(e) => setDateFrom(e.target.value)}
+                                    placeholder="Du"
+                                    className="px-2 py-1 rounded border-0 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-32"
+                                />
+                                <span className="text-xs text-slate-500">→</span>
+                                <input
+                                    type="date"
+                                    value={dateTo}
+                                    onChange={(e) => setDateTo(e.target.value)}
+                                    placeholder="Au"
+                                    className="px-2 py-1 rounded border-0 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-32"
+                                />
+                            </div>
 
-                    {/* Sélecteur pageSize */}
-                    <div className="flex items-center gap-2 text-sm">
-                        <span className="text-slate-600">Afficher</span>
-                        <select
-                            value={pageSize}
-                            onChange={(e) => {
-                                onPageSizeChange(Number(e.target.value));
-                                onPageChange(1);
-                            }}
-                            className="border border-slate-300 rounded-lg px-2 py-1 bg-white"
-                        >
-                            <option value={5}>5</option>
-                            <option value={10}>10</option>
-                            <option value={20}>20</option>
-                            <option value={50}>50</option>
-                        </select>
-                        <span className="text-slate-600">par page</span>
+                            {/* Sélecteur pageSize */}
+                            <div className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2 border border-slate-200">
+                                <span className="text-sm text-slate-600 whitespace-nowrap">Afficher</span>
+                                <select
+                                    value={pageSize}
+                                    onChange={(e) => {
+                                        onPageSizeChange(Number(e.target.value));
+                                        onPageChange(1);
+                                    }}
+                                    className="border-0 rounded bg-white px-2 py-1 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value={5}>5</option>
+                                    <option value={10}>10</option>
+                                    <option value={20}>20</option>
+                                    <option value={50}>50</option>
+                                </select>
+                                <span className="text-sm text-slate-600">/page</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
