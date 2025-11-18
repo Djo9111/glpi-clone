@@ -1,3 +1,4 @@
+// app/components/AdminTicketModal.tsx (version mise à jour)
 "use client";
 
 import { useState } from "react";
@@ -6,6 +7,7 @@ import { X } from "lucide-react";
 import { statusLabel, type Ticket, type Technicien } from "@/app/dashboard/admin-tickets/utils/ticketHelpers";
 import { StatusBadge } from "./StatusBadge";
 import { AttachmentList } from "./AttachmentList";
+import TechnicienRecommandation from "./TechnicienRecommandation";
 
 interface AdminTicketModalProps {
     ticket: Ticket;
@@ -28,6 +30,22 @@ export default function AdminTicketModal({
         "OPEN", "IN_PROGRESS", "A_CLOTURER", "REJETE", "TRANSFERE_MANTIS", "CLOSED"
     ];
 
+    const [selectedTechnicien, setSelectedTechnicien] = useState<number>(
+        ticket.assignedTo?.id || 0
+    );
+
+    const handleAssign = (ticketId: number, technicienId: number) => {
+        setSelectedTechnicien(technicienId);
+        onAssign(ticketId, technicienId);
+
+        // Log de l'assignation (optionnel - pour tracking)
+        console.log(`Ticket ${ticketId} assigné à technicien ${technicienId}`);
+    };
+
+    const handleRecommandationSelect = (technicienId: number) => {
+        handleAssign(ticket.id, technicienId);
+    };
+
     return (
         <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex min-h-full items-center justify-center p-4">
@@ -48,6 +66,7 @@ export default function AdminTicketModal({
                             <X className="h-5 w-5" />
                         </button>
                     </div>
+
                     <div className="px-6 py-6 max-h-[calc(100vh-200px)] overflow-y-auto space-y-6">
                         {/* Ticket details */}
                         <div className="space-y-3">
@@ -55,7 +74,9 @@ export default function AdminTicketModal({
                                 {ticket.description || "(Sans titre)"}
                             </h3>
                             <div className="flex flex-wrap gap-2">
-                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ticket.type === "ASSISTANCE" ? "bg-blue-100 text-blue-800" : "bg-purple-100 text-purple-800"
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ticket.type === "ASSISTANCE"
+                                        ? "bg-blue-100 text-blue-800"
+                                        : "bg-purple-100 text-purple-800"
                                     }`}>
                                     {ticket.type === "ASSISTANCE" ? "Assistance" : "Intervention"}
                                 </span>
@@ -72,6 +93,13 @@ export default function AdminTicketModal({
                             </div>
                         </div>
 
+                        {/* SECTION RECOMMANDATIONS */}
+                        <TechnicienRecommandation
+                            ticketId={ticket.id}
+                            onSelectTechnicien={handleRecommandationSelect}
+                            technicienActuel={selectedTechnicien}
+                        />
+
                         {/* Assignment and Status */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
@@ -79,8 +107,8 @@ export default function AdminTicketModal({
                                     Assigner un technicien
                                 </label>
                                 <select
-                                    onChange={(e) => onAssign(ticket.id, parseInt(e.target.value))}
-                                    value={ticket.assignedTo?.id || ""}
+                                    onChange={(e) => handleAssign(ticket.id, parseInt(e.target.value))}
+                                    value={selectedTechnicien || ""}
                                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
                                 >
                                     <option value="">Non assigné</option>

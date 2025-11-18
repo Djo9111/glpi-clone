@@ -160,10 +160,54 @@ async function sendNewTicketEmails(ticket: any, pieceUrls: string[] = []) {
   await prisma.ticket.update({ where: { id: ticket.id }, data: { mailSentAt: new Date() } });
 }
 
+// Nouvelle fonction pour précharger les recommandations
+async function preloadTechnicienRecommandations(ticketId: number) {
+  try {
+    // Créer un token temporaire pour l'appel API (basé sur le secret JWT)
+    // Note: En production, vous pourriez vouloir une méthode plus sécurisée
+    const tempToken = jwt.sign(
+      {
+        id: 0,
+        role: "CHEF_DSI",
+        codeHierarchique: 99,
+        departementId: null
+      },
+      JWT_SECRET,
+      { expiresIn: '30s' }
+    );
+
+    const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+
+    const response = await fetch(
+      `${baseUrl}/api/technicien/recommandation?ticketId=${ticketId}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${tempToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      console.log(`✅ Recommandations préchargées pour le ticket #${ticketId}:`,
+        data.recommandations?.slice(0, 3).map((t: any) =>
+          `${t.prenom} ${t.nom} (${t.chargeTravail} tickets)`
+        ).join(', ') || 'Aucune recommandation'
+      );
+    } else {
+      console.warn(`⚠️ Préchargement des recommandations échoué pour le ticket #${ticketId}:`, response.status);
+    }
+  } catch (error) {
+    // Ne pas bloquer le processus principal en cas d'erreur
+    console.warn(`❌ Erreur lors du préchargement des recommandations pour le ticket #${ticketId}:`, error);
+  }
+}
+
 /* ---------------------------------------------------------------------------------- */
 /* GET: récupérer les tickets visibles selon le cloisonnement hiérarchique            */
 /* ---------------------------------------------------------------------------------- */
-// Dans la fonction GET, modifiez cette partie :
 export async function GET(request: Request) {
   try {
     const payload = getUserFromRequest(request);
@@ -378,6 +422,11 @@ export async function POST(request: Request) {
       // email (non bloquant)
       sendNewTicketEmails(ticket).catch(e => console.error("Email CHEF_DSI non envoyé:", e));
 
+      // NOUVEAU : Préchargement des recommandations (non bloquant)
+      preloadTechnicienRecommandations(ticket.id).catch(e =>
+        console.error("Erreur préchargement recommandations:", e)
+      );
+
       return NextResponse.json({ message: "Ticket créé", ticket }, { status: 201 });
     }
 
@@ -499,6 +548,11 @@ export async function POST(request: Request) {
       }
 
       sendNewTicketEmails(ticket, pieceUrls).catch(e => console.error("Email CHEF_DSI non envoyé:", e));
+
+      // NOUVEAU : Préchargement des recommandations (non bloquant)
+      preloadTechnicienRecommandations(ticket.id).catch(e =>
+        console.error("Erreur préchargement recommandations:", e)
+      );
 
       return NextResponse.json({
         message: "Ticket créé",
