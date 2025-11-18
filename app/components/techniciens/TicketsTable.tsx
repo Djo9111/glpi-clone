@@ -349,7 +349,7 @@ function TicketRow({ ticket, onTicketClick }: { ticket: Ticket; onTicketClick: (
             <td className="px-6 py-4 whitespace-nowrap">
                 <span className="text-sm text-slate-700">
                     {ticket.createdBy.prenom} {ticket.createdBy.nom}{" "}
-                    <span className="text-xs text-slate-400">({ticket.createdBy.id})</span>
+                    {/*<span className="text-xs text-slate-400">({ticket.createdBy.id})</span>*/}
                 </span>
             </td>
             <td className="px-6 py-4 whitespace-nowrap text-right">
