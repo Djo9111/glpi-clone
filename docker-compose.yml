@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:17
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ModienneG
+      POSTGRES_DB: glpi_clone
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+      - ./docker/init-db:/docker-entrypoint-initdb.d
+
+  app:
+    build: .
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://postgres:ModienneG@db:5432/glpi_clone
+      NODE_ENV: production
+    volumes:
+      # Maintenant les uploads sont dans /app/public/uploads (identique au code Next.js)
+      - ./public/uploads:/app/public/uploads
+    depends_on:
+      - db
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - "3000:80"   # Accès à http://localhost:3000
+    volumes:
+      - ./public/uploads:/app/public/uploads   # même chemin que APP !!
+      - ./docker/nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - app
+
+volumes:
+  pgdata:
