@@ -11,33 +11,32 @@ services:
       - ./docker/init-db:/docker-entrypoint-initdb.d
 
   app:
-  build: .
-  restart: always
-  environment:
-    DATABASE_URL: postgresql://postgres:ModienneG@db:5432/glpi_clone
-    NODE_ENV: production
+    build: .
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://postgres:ModienneG@db:5432/glpi_clone
+      NODE_ENV: production
 
-    # --- Variables SMTP ---
-    SMTP_HOST: smtp.gmail.com
-    SMTP_PORT: "465"
-    SMTP_SECURE: "true"
-    SMTP_USER: modienneg@gmail.com
-    SMTP_PASS: gbcvnvbvzjvnvedy  # le mot de passe application Gmail
-    EMAIL_FROM: "Assistance DSI <modienneg@gmail.com>"
+      # --- SMTP ---
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: "465"
+      SMTP_SECURE: "true"
+      SMTP_USER: modienneg@gmail.com
+      SMTP_PASS: gbcvnvbvzjvnvedy
+      EMAIL_FROM: "Assistance DSI <modienneg@gmail.com>"
 
-  volumes:
-  # Maintenant les uploads sont dans /app/public/uploads (identique au code Next.js)
-    - ./public/uploads:/app/public/uploads
-  depends_on:
-    - db
+    volumes:
+      - ./public/uploads:/app/public/uploads
 
+    depends_on:
+      - db
 
   nginx:
     image: nginx:latest
     ports:
-      - "3000:80"   # Accès à http://localhost:3000
+      - "3000:80"
     volumes:
-      - ./public/uploads:/app/public/uploads   # même chemin que APP !!
+      - ./public/uploads:/app/public/uploads
       - ./docker/nginx/nginx.conf:/etc/nginx/conf.d/default.conf
     depends_on:
       - app
